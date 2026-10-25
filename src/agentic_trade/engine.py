@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Iterable
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -32,6 +35,42 @@ class ExperimentConfig:
     use_outcome_recall: bool = True
     use_topic_matching: bool = True
     llm_cache_dir: Path = Path("artifacts/llm_cache")
+
+    @classmethod
+    def from_yaml(cls, path: Path | str) -> ExperimentConfig:
+        import yaml
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        converted = {}
+        for k, v in data.items():
+            if k in ("start_date", "train_end", "test_start", "end_date") and isinstance(v, str):
+                converted[k] = date.fromisoformat(v)
+            elif k in ("data_dir", "output_dir", "llm_cache_dir") and isinstance(v, str):
+                converted[k] = Path(v)
+            else:
+                converted[k] = v
+        return cls(**converted)
+
+    def to_dict(self) -> dict:
+        return {
+            "data_dir": str(self.data_dir),
+            "output_dir": str(self.output_dir),
+            "ticker": self.ticker,
+            "start_date": self.start_date.isoformat(),
+            "train_end": self.train_end.isoformat(),
+            "test_start": self.test_start.isoformat(),
+            "end_date": self.end_date.isoformat(),
+            "top_k": self.top_k,
+            "trial_id": self.trial_id,
+            "temperature": self.temperature,
+            "backbone": self.backbone,
+            "risk_mode": self.risk_mode,
+            "use_provenance": self.use_provenance,
+            "use_reconciliation": self.use_reconciliation,
+            "use_outcome_recall": self.use_outcome_recall,
+            "use_topic_matching": self.use_topic_matching,
+            "llm_cache_dir": str(self.llm_cache_dir),
+        }
 
 class ExperimentEngine:
     def __init__(self, config: ExperimentConfig):
@@ -98,6 +137,7 @@ class ExperimentEngine:
             prices["date"] = prices["date"].dt.date
             if "ticker" in prices.columns:
                 prices = prices[prices["ticker"].eq(self.config.ticker)]
+            prices = prices.drop_duplicates(subset=["date"])
             if prices.empty:
                 raise ValueError(f"No prices found for ticker {self.config.ticker}")
             return prices.set_index("date")["close"].astype(float).to_frame()
@@ -167,17 +207,18 @@ class ExperimentEngine:
                 if outcome is not None:
                     prompt_memories.append({"id": f"outcome:{outcome['date']}", "source": "decision_history", "date": outcome["date"], "text": f"Prior similar decision: {outcome['action']}; realized return: {outcome['realized_return']:.6f}"})
                 action = self._signal(memories, previous_return) if name != "no_memory" else ("Buy" if previous_return > 0.01 else "Sell" if previous_return < -0.01 else "Hold")
-                llm_result = {"action": action, "reasoning": "deterministic policy", "cited_memory_ids": cited if 'cited' in locals() else [], "llm_status": "disabled"}
+                cited = [event.event_id for event in memories[:3]]
+                llm_result = {"action": action, "reasoning": "deterministic policy", "cited_memory_ids": cited, "llm_status": "disabled"}
                 if self.llm is not None:
                     llm_result = self.llm.decide(name, self.config.ticker, current_date.isoformat(), previous_return, prompt_memories)
                     action = llm_result["action"]
+                    cited = llm_result.get("cited_memory_ids", cited)
                 if self.config.risk_mode == "conservative" and memories and abs(sum(event.sentiment for event in memories) / len(memories)) < 0.25:
                     action = "Hold"
                 position = {"Buy": 1.0, "Sell": -1.0, "Hold": 0.0}[action]
                 if self.config.risk_mode == "conservative":
                     position *= 0.5
                 daily_return = position * realized
-                cited = [event.event_id for event in memories[:3]]
                 row = {"date": current_date.isoformat(), "decision": action, "position": position, "price": float(self.prices.loc[current_date, "close"]), "next_return": realized, "daily_return": daily_return, "cited_memory_ids": cited, "reasoning": llm_result["reasoning"], "llm_status": llm_result["llm_status"], "trial_id": self.config.trial_id, "risk_mode": self.config.risk_mode, "top_k": self.config.top_k}
                 self.results[name].append(row)
                 for rank, event in enumerate(memories, 1):

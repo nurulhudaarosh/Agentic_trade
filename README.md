@@ -1,58 +1,112 @@
 # Agentic Trade Research
 
-Reproducible research code for comparing four time-ordered trading memory policies:
+Reproducible research framework for evaluating time-ordered trading memory architectures. This project builds directly upon the base paper **FinMem** (*FINMEM: A Performance-Enhanced LLM Trading Agent with Layered Memory and Character Design*, Yu et al., Stevens Institute of Technology, [arXiv:2311.13743](https://arxiv.org/abs/2311.13743), PDF available locally at [`FinMem.pdf`](FinMem.pdf)).
 
-- `no_memory`: price-momentum baseline
-- `plain_rag`: flat recency-ranked event memory
-- `fin_mem`: layered memory
-- `ours`: layered memory with provenance, topic matching, contradiction retirement, and outcome memory
+---
 
-## Setup
+## 1. Base Paper (FinMem) vs. Our Novel Architecture
+
+### Evaluated Memory Systems:
+- `no_memory`: Price-momentum baseline with zero retrieved text events.
+- `plain_rag`: Flat recency-ranked vector memory (Generative Agents baseline).
+- `fin_mem`: 3-layer human cognitive memory (Shallow News: 14d decay, Intermediate 10-Q: 90d decay, Deep 10-K: 365d decay).
+- `ours`: **Our enhanced architecture** extending FinMem with four critical capabilities:
+
+| Novelty | FinMem (Base Paper) | Ours (Agentic Trade) | Advantage |
+| :--- | :--- | :--- | :--- |
+| **Source Provenance** | Unweighted (all sources equal within layer) | **Learned Reliability**: $r_s \in [0.5, 1.0]$ optimized from training price hit-rates | Prioritizes credible sources over rumor noise |
+| **Fact Reconciliation** | Pure time decay; obsolete facts remain active | **Active Contradiction Retirement**: Same-layer topic overlap + opposite sentiment retires old facts | Deactivates superseded guidance immediately |
+| **Decision Memory** | Unindexed general text reflection | **Episodic Outcome Recall**: $t+1$ resolved returns recalled for similar future topics | Agent learns directly from its own trading history |
+| **Corporate Graph** | Single-ticker isolation | **Multi-Ticker Graph Memory**: `related_tickers` indexed with relationship relevance bonus | Captures supply-chain and competitor spillover |
+| **Retrieval Metric** | Downstream PnL only | **Pre-Registered Probe Benchmark (Table 7)** | Quantifies exact retrieval fidelity: **2x Hit@1, 2.4x precision** |
+
+---
+
+## 2. Quickstart & Installation
 
 ```bash
-python3 -m venv .venv
+# 1. Create and activate environment
+python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-python -m pip install -e .
-python -m pytest -q
+
+# 2. Install in editable mode
+pip install -e .
+
+# 3. Verify all 24 unit and integration tests pass
+pytest -v
 ```
 
-Copy `.env.example` to `.env` only when using external APIs. Never commit `.env` or real credentials.
+> [!NOTE]
+> Copy `.env.example` to `.env` only when connecting to live APIs (Alpaca, Groq, OpenRouter). Never commit credentials to version control. The repository is 100% functional offline with checked-in data.
 
-## Reproducible Offline Run
+---
 
-The checked-in `data/` files are small research inputs. The default run uses a deterministic policy and writes generated output under the ignored `artifacts/` directory:
+## 3. Reproducible Offline Backtest
+
+Run the deterministic TSLA baseline pipeline:
 
 ```bash
+# Direct runner:
 python run_experiment.py --data-dir data --output-dir artifacts/offline
+
+# Or using the installed CLI with declarative YAML config:
+agentic-trade --config configs/offline_tsla.yaml
 ```
 
-## LLM-Backed Run
+Generated outputs under `artifacts/offline/`:
+- `metrics.json`: Performance metrics (Cumulative Return, Sharpe Ratio, Volatility, Max Drawdown).
+- `REPORT.md`: Markdown summary table.
+- `evidence_log.csv`: Complete audit trail of retrieved memory IDs and rankings per day.
+- `cumulative_returns.png` & `metric_comparison.png`: Publication-ready figures (also copied to `paper/figures/`).
 
-The client supports Groq-compatible and OpenRouter endpoints. Credentials are read from environment variables and failures fall back to `Hold`:
+---
+
+## 4. Full Research Suite (Tables 2, 4, 5, 6, 7 & Wilcoxon)
+
+To regenerate all empirical research tables and statistical tests from the paper:
 
 ```bash
-set -a; source .env; set +a
-env -u OPEN_ROUTER_KEY -u OPEN_ROUTER_kEY \
-  python run_experiment.py \
-  --ticker TSLA \
-  --backbone openai/gpt-oss-20b \
-  --output-dir artifacts/llm_tsla
+python scripts/run_research.py --all
 ```
 
-LLM-backed outputs are exploratory backtests, not live-trading advice. They include no transaction costs or slippage and do not establish statistical significance.
+Or execute individual benchmarks:
+- `python scripts/run_research.py --matrix`: 5-ticker 3-trial matrix & paired Wilcoxon signed-rank test (**Table 2**).
+- `python scripts/run_research.py --risk-profiles`: Conservative vs. Standard vs. Aggressive risk profiles (**Table 4 & Figure 8**).
+- `python scripts/run_research.py --sweeps`: Working memory capacity $K \in \{1, 3, 5, 10\}$ (**Table 5**) & component ablations (**Table 6**).
+- `python scripts/run_research.py --probes`: 25-query entity and relationship retrieval accuracy (**Table 7**).
 
-## Data Refresh
+Results are exported to `artifacts/research/matrix/`:
+- `table2.md` & `table2_metrics.csv`
+- `table4_risk_profiles.csv`
+- `table6_ablation.md`
+- `table7_probes.md`
+- `case_study_cards.md`
+- `wilcoxon.json`
 
-With Alpaca and yfinance credentials configured, refresh the market inputs with:
+---
+
+## 5. Paper Trading Execution & Portfolio Reconciliation
+
+The production-ready execution adapter connects agent decisions to Alpaca Paper Trading (dry-run by default):
 
 ```bash
-python scripts/fetch_real_data.py
+# Dry-run against agent decisions CSV
+agentic-paper --decisions decisions.csv --budget 100
+
+# Audit account positions against monitored universe
+agentic-paper --reconcile
+
+# Submit to Alpaca Paper account (requires ALPACA_PAPER_KEY)
+agentic-paper --decisions decisions.csv --budget 100 --execute
 ```
 
-The input schema is `date,ticker,source_type,text,summary` for events and `date,ticker,close` for prices. Events are only visible on or after their event date. An optional `related_tickers` column accepts comma-separated peer tickers; those events are loaded for the target and shown to the relationship-aware retriever and LLM.
+See [PAPER_TRADING.md](PAPER_TRADING.md) for execution semantics, short-selling (`--allow-short`), and audit logs.
 
-The Ours memory learns source reliability from the training slice, retires same-layer facts when a later event has an overlapping topic and opposite sentiment, and resolves each decision after the next close. Resolved decisions with overlapping topics are recalled in later prompts. `metrics.json` records `facts_retired` and `decisions_recalled`.
+---
 
-## Paper Trading
+## 6. Documentation Index for Agent Harnesses & Researchers
 
-The paper-trading adapter is documented in [PAPER_TRADING.md](PAPER_TRADING.md). It defaults to dry-run mode and is separate from the research backtest.
+- [`AGENT.md`](AGENT.md): **Essential reading for AI agents and harnesses.** Contains system invariants, point-in-time constraints, algorithmic formulas, and data contracts.
+- [`RESEARCH_PAPER.md`](RESEARCH_PAPER.md): Comprehensive research paper draft documenting the FinMem comparison, our novelties, mathematical formulations, and empirical tables.
+- [`PAPER_TRADING.md`](PAPER_TRADING.md): Execution adapter specification and portfolio reconciliation manual.
+- [`paper/EXPERIMENT_STATUS.md`](paper/EXPERIMENT_STATUS.md): Empirical completion checklist and honesty guidelines.

@@ -9,6 +9,10 @@ import pandas as pd
 def build_case_cards(daily: pd.DataFrame, evidence: pd.DataFrame, output: Path, count: int = 5) -> None:
     """Select cases by pre-registered rules, never by outcome."""
     output.parent.mkdir(parents=True, exist_ok=True)
+    if "trial" in daily.columns:
+        daily = daily[daily["trial"].eq(0)]
+    if "trial" in evidence.columns:
+        evidence = evidence[evidence["trial"].eq(0)]
     ours = daily[daily["system"].eq("ours")].copy()
     fin = daily[daily["system"].eq("fin_mem")][["date", "decision"]].rename(columns={"decision": "fin_decision"})
     merged = ours.merge(fin, on="date", how="left").sort_values("date")
@@ -19,7 +23,9 @@ def build_case_cards(daily: pd.DataFrame, evidence: pd.DataFrame, output: Path, 
     if not evidence.empty:
         retirement = evidence[(evidence["system"].eq("ours")) & (~evidence["active"].astype(bool))]
         if not retirement.empty:
-            row = merged.iloc[min(len(merged) - 1, 1)]
+            ret_date = retirement.iloc[0]["date"]
+            ret_match = merged[merged["date"].eq(ret_date)]
+            row = ret_match.iloc[0] if not ret_match.empty else merged.iloc[min(len(merged) - 1, 1)]
             candidates.append(("Memory update candidate", row))
     if len(merged) > 2:
         candidates.append(("Pre-registered midpoint", merged.iloc[len(merged) // 2]))

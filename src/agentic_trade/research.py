@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import argparse
 import json
+import os
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,11 +44,15 @@ def paired_wilcoxon(results: pd.DataFrame, metric: str = "daily_return") -> dict
     paired = pivot[["ours", second]].dropna()
     if len(paired) < 2 or np.allclose(paired["ours"], paired[second]):
         return {"comparison": second, "p_value": 1.0, "statistic": 0.0, "significant": False}
-    statistic, p_value = wilcoxon(paired["ours"], paired[second])
-    return {"comparison": second, "p_value": float(p_value), "statistic": float(statistic), "significant": bool(p_value < 0.05)}
+    try:
+        statistic, p_value = wilcoxon(paired["ours"], paired[second])
+        return {"comparison": second, "p_value": float(p_value), "statistic": float(statistic), "significant": bool(p_value < 0.05)}
+    except Exception:
+        return {"comparison": second, "p_value": 1.0, "statistic": 0.0, "significant": False}
 
 
 def markdown_table(summary: pd.DataFrame, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
     rows = ["| Ticker | System | Return | Sharpe | Volatility | Drawdown | Hold |", "|---|---|---:|---:|---:|---:|---:|"]
     best = summary.groupby("ticker")["cumulative_return"].transform("max")
     for _, row in summary.iterrows():
@@ -104,6 +113,68 @@ def run_sweep(base: ExperimentConfig, name: str, values: list[object], flag: str
     return frame
 
 
+def summarize_ablations(sweeps_dir: Path, output_dir: Path | None = None) -> pd.DataFrame:
+    """Consolidate ablation sweep files into Table 6 CSV and Markdown."""
+    target_dir = output_dir or sweeps_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    feature_names = {
+        "use_provenance": "w/o Learned Provenance",
+        "use_reconciliation": "w/o Contradiction Retirement",
+        "use_outcome_recall": "w/o Decision Recall",
+        "use_topic_matching": "w/o Topic Matching",
+    }
+    rows: list[dict] = []
+    base_return: float | None = None
+
+    for flag, label in feature_names.items():
+        csv_path = sweeps_dir / f"ablation_{flag}.csv"
+        if not csv_path.exists():
+            continue
+        df = pd.read_csv(csv_path)
+        ours_df = df[df["system"].eq("ours")]
+        true_row = ours_df[ours_df["setting"].astype(str).str.lower().eq("true")]
+        false_row = ours_df[ours_df["setting"].astype(str).str.lower().eq("false")]
+
+        if not true_row.empty and base_return is None:
+            base_return = float(true_row.iloc[0]["cumulative_return"])
+            rows.append({
+                "configuration": "Full System (Ours)",
+                "cumulative_return": base_return,
+                "sharpe_ratio": float(true_row.iloc[0]["sharpe_ratio"]),
+                "annualized_volatility": float(true_row.iloc[0]["annualized_volatility"]),
+                "max_drawdown": float(true_row.iloc[0]["max_drawdown"]),
+                "delta_return": 0.0,
+            })
+
+        if not false_row.empty:
+            ret = float(false_row.iloc[0]["cumulative_return"])
+            delta = (ret - base_return) if base_return is not None else 0.0
+            rows.append({
+                "configuration": label,
+                "cumulative_return": ret,
+                "sharpe_ratio": float(false_row.iloc[0]["sharpe_ratio"]),
+                "annualized_volatility": float(false_row.iloc[0]["annualized_volatility"]),
+                "max_drawdown": float(false_row.iloc[0]["max_drawdown"]),
+                "delta_return": delta,
+            })
+
+    table6 = pd.DataFrame(rows)
+    table6.to_csv(target_dir / "table6_ablation.csv", index=False)
+
+    md_lines = [
+        "| Configuration | Return | Sharpe | Volatility | Drawdown | Delta Return |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    for _, r in table6.iterrows():
+        delta_str = f"{r['delta_return']:+.4f}" if r["configuration"] != "Full System (Ours)" else "-"
+        md_lines.append(
+            f"| {r['configuration']} | {r['cumulative_return']:.4f} | {r['sharpe_ratio']:.2f} | "
+            f"{r['annualized_volatility']:.4f} | {r['max_drawdown']:.4f} | {delta_str} |"
+        )
+    (target_dir / "table6_ablation.md").write_text("\n".join(md_lines) + "\n")
+    return table6
+
+
 def run_risk_profiles(base: ExperimentConfig, profiles: list[str] | None = None) -> pd.DataFrame:
     """Run every risk profile on identical inputs and export Table 4 artifacts."""
     profiles = profiles or ["conservative", "standard", "aggressive"]
@@ -140,3 +211,35 @@ def run_risk_profiles(base: ExperimentConfig, profiles: list[str] | None = None)
     fig.savefig(Path("paper/figures/fig8_risk_profiles.png"), dpi=180)
     plt.close(fig)
     return summary
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate paper tables, figures, sweeps, and evidence logs")
+    parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--output-dir", type=Path, default=Path("artifacts/research"))
+    parser.add_argument("--ticker", default="TSLA")
+    parser.add_argument("--tickers", default="TSLA,NFLX,AMZN,MSFT,COIN")
+    parser.add_argument("--trials", type=int, default=3)
+    parser.add_argument("--matrix", action="store_true")
+    parser.add_argument("--sweeps", action="store_true")
+    parser.add_argument("--risk-profiles", action="store_true")
+    parser.add_argument("--all", action="store_true", help="Run matrix, sweeps, and risk profiles")
+    args = parser.parse_args()
+    base = ExperimentConfig(data_dir=args.data_dir, output_dir=args.output_dir, ticker=args.ticker, start_date=date(2026, 6, 1), train_end=date(2026, 8, 31), test_start=date(2026, 9, 1), end_date=date(2026, 10, 23))
+
+    if args.matrix or args.all:
+        run_matrix(base, [item.strip().upper() for item in args.tickers.split(",") if item.strip()], args.trials)
+    if args.sweeps or args.all:
+        run_sweep(base, "table4_risk_modes", ["conservative", "standard", "aggressive"], "risk_mode")
+        run_sweep(base, "table5_top_k", [1, 3, 5, 10], "top_k")
+        for feature in ["use_provenance", "use_reconciliation", "use_outcome_recall", "use_topic_matching"]:
+            run_sweep(base, f"ablation_{feature}", [True, False], feature)
+        summarize_ablations(base.output_dir / "sweeps", base.output_dir / "matrix")
+    if args.risk_profiles or args.all:
+        run_risk_profiles(base)
+    if not (args.matrix or args.sweeps or args.risk_profiles or args.all):
+        print("Choose --matrix, --sweeps, --risk-profiles, or --all")
+
+
+if __name__ == "__main__":
+    main()

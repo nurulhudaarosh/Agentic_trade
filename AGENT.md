@@ -1,48 +1,204 @@
-# Agentic Trade Research Project
+# Agent Harness Specification & Research Reference: Agentic Trade
 
-This repository is a reproducible research project for comparing memory systems in an agentic trading workflow.
+This document is the definitive guide and operational contract for AI agent harnesses (and human researchers) working in this repository. It provides architecture specifications, theoretical foundations comparing our system against the baseline **FinMem** paper, strict operational invariants, and exact execution instructions.
 
-## Systems
+---
 
-- `no_memory`: price-momentum baseline with no retrieved events
-- `plain_rag`: recency-ranked flat event store
-- `fin_mem`: layered memory with source and layer-aware retrieval
-- `ours`: FinMem plus topic matching, provenance weighting, contradiction retirement, and outcome memory
+## 1. Research Foundation & Base Paper Alignment
 
-## Run Offline
+### Base Paper: FinMem (arXiv:2311.13743)
+- **Title**: *FINMEM: A Performance-Enhanced LLM Trading Agent with Layered Memory and Character Design* (Yu et al., Stevens Institute of Technology).
+- **Core Concept**: Emulates human cognitive processing (Craik & Lockhart, 1972) by stratifying financial data into three decay layers:
+  1. **Shallow Layer**: Daily market news ($\tau \approx 14$ days decay).
+  2. **Intermediate Layer**: Quarterly 10-Q filings ($\tau \approx 90$ days decay).
+  3. **Deep Layer**: Annual 10-K filings and extended reflections ($\tau \approx 365$ days decay).
+- **FinMem Profiling & Decision Making**: Character definition with risk inclinations (Risk-Seeking, Risk-Averse, Self-Adaptive) and discrete trading decisions (`Buy`, `Sell`, `Hold`).
 
-```bash
-python3 -m pip install -e .
-python3 run_experiment.py --data-dir data --output-dir artifacts/offline
+### Our System ("Ours"): What Was Missing in FinMem & Our Core Novelties
+
+While FinMem introduced layered decay, it suffers from critical real-world limitations that our architecture explicitly solves:
+
+```
++---------------------------------------------------------------------------------------+
+|                                    OURS ARCHITECTURE                                  |
+|                                                                                       |
+|  +--------------------+   +-----------------------+   +----------------------------+  |
+|  | Learned Provenance |   | Dynamic Contradiction |   | Episodic Decision Outcome  |  |
+|  |    Reliability     |   |      Retirement       |   |       Memory Recall        |  |
+|  | (Hit-rate learning |   | (Deactivates stale/   |   | (Resolves at t+1; recalls  |  |
+|  |  from train slice) |   |  contradicted facts)  |   |  prior similar outcomes)   |  |
+|  +---------+----------+   +-----------+-----------+   +-------------+--------------+  |
+|            |                          |                             |                 |
+|            +--------------------------+-----------------------------+                 |
+|                                       v                                               |
+|                    +------------------------------------+                             |
+|                    |   Hierarchical Retrieval Engine    |                             |
+|                    |  - Stratified layers (10K/10Q/News)|                             |
+|                    |  - Topic keyword alignment         |                             |
+|                    |  - Cross-ticker relationship score |                             |
+|                    |  - Strict point-in-time filtering  |                             |
+|                    +------------------+-----------------+                             |
+|                                       |                                               |
+|                                       v                                               |
+|                    +------------------------------------+                             |
+|                    |    Execution & Decision Engine     |                             |
+|                    |  - Risk Modes (Std/Cons/Aggr)      |                             |
+|                    |  - Position-aware Paper Trader     |                             |
+|                    |  - Automated Reconciliation        |                             |
+|                    +------------------------------------+                             |
++---------------------------------------------------------------------------------------+
 ```
 
-The run writes daily decisions, `metrics.json`, `REPORT.md`, and paper-ready PNG figures under `artifacts/offline/`.
+1. **Dynamic Source Provenance & Hit-Rate Reliability**:
+   - *FinMem Flaw*: Treats all sources within a layer equally. Analyst rumors and SEC audited filings have identical trust.
+   - *Our Novelty*: Evaluates source predictive accuracy during the training period ($r_s = \frac{\sum hits}{N} \in [0.5, 1.0]$ where hit = $sentiment \times \Delta close_{t+1} > 0$). Reliable sources are boosted during retrieval.
+2. **Active Contradiction Retirement & Fact Reconciliation**:
+   - *FinMem Flaw*: Pure time decay. When an event is reversed (e.g., an acquisition blocked or a guidance miss announced after optimism), the outdated fact lingers in memory and pollutes decisions.
+   - *Our Novelty*: When an incoming event in the same layer shares topic tags with an older event but has opposite sentiment ($sentiment_{old} \times sentiment_{new} < 0$), the older event is marked `active = False` and retired.
+3. **Resolved Episodic Decision Outcome Memory**:
+   - *FinMem Flaw*: Extended reflections summarize trends, but the model cannot query past decisions indexed by topic and see what *actually happened*.
+   - *Our Novelty*: Each trading decision is recorded alongside its topic tags. When next-day price settles, the engine calls `resolve(decision_date, realized_return)`. When future similar market topics emerge, `recall(topics)` feeds the past decision and its realized return directly into prompt context.
+4. **Supply Chain & Multi-Ticker Relationship Graph Awareness**:
+   - *FinMem Flaw*: Single-ticker isolation. Fails to incorporate supplier, customer, or competitor dynamics.
+   - *Our Novelty*: Ingests `related_tickers` (e.g., TSLA $\leftrightarrow$ NVDA, CATL, Panasonic). Applies relationship scoring bonus to related-firm events.
+5. **Pre-Registered Probe Retrieval Benchmark (Table 7)**:
+   - *FinMem Flaw*: No direct ground-truth retrieval evaluation.
+   - *Our Novelty*: Built-in benchmark measuring $Hit@1$, $Hit@3$, $Hit@5$, $MRR$, and $Precision@5$ across 25 pre-registered corporate relationship, guidance, and legal risk queries (`agentic_trade.probes`).
+6. **Production Execution Adapter & Portfolio Reconciliation**:
+   - *FinMem Flaw*: Theoretical action tokens only.
+   - *Our Novelty*: Position-aware paper trading (`agentic-paper`), budget capping (20%), position liquidation on `Sell`, short support (`--allow-short`), and portfolio reconciliation (`--reconcile`).
 
-## Reproducibility Rules
+---
 
-- Input events must use `date,ticker,source_type,text,summary`.
-- Prices must use `date,close`; provide `data/prices.csv` for a network-free run.
-- Events are visible only on or before their event date.
-- The final test-day return is zero because its next close is unavailable.
-- No API key is stored in source or documentation. Live providers are optional and must read credentials from environment variables.
-- Results are descriptive and do not claim statistical significance.
-
-## Tests
-
-```bash
-python3 -m pytest -q
-```
-
-The tests include future-event leakage protection, contradiction retirement, and an offline end-to-end engine fixture.
-
-## Layout
+## 2. Repository Layout & File Manifest
 
 ```text
-src/agentic_trade/  core package and CLI
-scripts/             research utilities
-configs/             experiment configuration
-artifacts/           generated run outputs (ignored)
-paper/               manuscript and figure outputs
-tests/               unit and integration tests
-data/                checked-in input data
+├── AGENT.md                 <- (This file) Operational specification for agent harnesses
+├── README.md                <- Quickstart and user guide
+├── RESEARCH_PAPER.md        <- Research paper draft comparing FinMem vs. Ours
+├── PAPER_TRADING.md         <- Alpaca paper trading and position reconciliation guide
+├── FinMem.pdf               <- The base paper (Yu et al., arXiv:2311.13743)
+├── pyproject.toml           <- Package metadata, dependencies, scripts, pytest config
+├── requirements.txt         <- Pinned core and optional dependencies
+├── run_experiment.py        <- Compatibility CLI runner for baseline offline backtest
+├── decisions.csv            <- Sample agent decisions input for paper trading
+├── configs/                 <- Declarative YAML experiment configurations
+│   ├── offline_tsla.yaml    <- Deterministic baseline offline config
+│   ├── multi_ticker.yaml    <- 5-ticker matrix configuration
+│   ├── risk_conservative.yaml <- Conservative risk profile config
+│   └── risk_aggressive.yaml   <- Aggressive risk profile config
+├── data/                    <- Checked-in point-in-time market data
+│   ├── multi_ticker_news.csv<- Ingested news events (TSLA, NFLX, AMZN, MSFT, COIN)
+│   └── prices.csv           <- Daily close prices
+├── src/agentic_trade/       <- Core research package
+│   ├── __init__.py          <- Package root (configures MPLCONFIGDIR=/tmp/matplotlib)
+│   ├── cli.py               <- CLI entrypoint (`agentic-trade`) with YAML config support
+│   ├── engine.py            <- ExperimentEngine, ExperimentConfig, backtest loop
+│   ├── memory.py            <- MemorySystem, NoMemory, PlainRAG, FinMem, OursMemory
+│   ├── paper_trader.py      <- PaperBroker, PaperTradingAgent (`agentic-paper`)
+│   ├── research.py          <- Multi-ticker matrix, Wilcoxon, sweeps (`agentic-research`)
+│   ├── probes.py            <- Table 7 memory probe retrieval benchmark
+│   ├── case_studies.py      <- Deterministic pre-registered case card builder
+│   └── llm.py               <- OpenRouter / Groq / OpenAI LLM decision client
+├── scripts/                 <- Research automation scripts
+│   ├── run_research.py      <- Full paper benchmark suite runner (--all, --matrix, etc.)
+│   └── fetch_real_data.py   <- Alpaca News & yfinance live ingestion with pagination
+├── tests/                   <- 24 unit and integration tests (100% pass required)
+│   ├── test_memory.py       <- Leakage, topics, contradiction retirement, outcome recall
+│   ├── test_engine.py       <- Backtest execution, single-row observations, daily returns
+│   ├── test_paper_trader.py <- Order limits, Sell position closing, shorting, reconcile
+│   ├── test_llm.py          <- Parser validation, fallback to Hold on missing credentials
+│   ├── test_case_studies.py <- Trial deduplication, case card structure
+│   ├── test_config.py       <- YAML configuration parsing and serialization
+│   ├── test_probes.py       <- Probe metrics (Hit@K, MRR, Precision) and output files
+│   └── test_research.py     <- Paired Wilcoxon stats, Table 6 ablation consolidation
+└── paper/                   <- Publication artifacts and status
+    ├── README.md            <- Overview of generated paper figures
+    ├── EXPERIMENT_STATUS.md <- Status tracking of empirical tables and limitations
+    └── figures/             <- High-resolution plots for publication
 ```
+
+---
+
+## 3. Strict Invariants for Agent Harnesses (DO NOT BREAK)
+
+When working or modifying code in this repository, any automated agent MUST observe these rules:
+
+1. **Zero Future Lookahead Leakage**:
+   - In `engine.py`, memories available on `current_date` MUST satisfy `event.event_date <= current_date`.
+   - Realized returns are strictly $r_{t} = \frac{Close_{t+1}}{Close_{t}} - 1$.
+   - The final observation day has $r_{final} = 0.0$ because its $t+1$ close is unavailable.
+2. **Point-in-Time Train/Test Integrity**:
+   - Provenance learning (`_learn_provenance`) and training memory ingestion MUST only use events where `event_date <= train_end`.
+   - Test evaluation MUST only process dates where `test_start <= d <= end_date`.
+3. **No Fabricated or Mock Results**:
+   - Never hardcode or fake numbers in `metrics.json`, `REPORT.md`, or paper markdown tables.
+   - All empirical numbers must be generated via code execution from data.
+4. **Scoping and Trial Separation**:
+   - In `build_case_cards`, always filter `daily` and `evidence` to a single trial (`trial == 0`) so memory ranks 1, 2, 3 reflect distinct memories rather than duplicate trial records.
+   - In `engine.py`, compute `cited` *before* referencing it in `llm_result`.
+5. **Matplotlib Headless Safety**:
+   - Keep `os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")` in `__init__.py` and modules importing `matplotlib` to ensure non-interactive execution without permission errors.
+6. **Test Suite Integrity**:
+   - All 24 tests in `tests/` MUST pass at all times:
+     ```bash
+     .venv/bin/pytest -v
+     ```
+
+---
+
+## 4. Standard Operational Playbook
+
+### A. Run Default Baseline Backtest
+```bash
+python run_experiment.py --data-dir data --output-dir artifacts/offline
+# OR using the installed CLI:
+agentic-trade --config configs/offline_tsla.yaml
+```
+Outputs written to `artifacts/offline/`:
+- `no_memory_daily.csv`, `plain_rag_daily.csv`, `fin_mem_daily.csv`, `ours_daily.csv`
+- `evidence_log.csv`: Full trace of retrieved memories per observation
+- `metrics.json`: Performance metrics (Cumulative Return, Sharpe, Volatility, Max Drawdown)
+- `REPORT.md`: Markdown summary table
+- `cumulative_returns.png`, `metric_comparison.png`
+
+### B. Run Full Research Suite (Tables 2, 4, 5, 6, 7 & Wilcoxon)
+```bash
+python scripts/run_research.py --all
+```
+Generated artifacts in `artifacts/research/`:
+- `matrix/table2.md` & `table2_metrics.csv`: 5-ticker 3-trial performance comparison
+- `matrix/wilcoxon.json`: Non-parametric statistical significance testing
+- `matrix/case_study_cards.md`: Pre-registered case study cards
+- `matrix/table6_ablation.md`: Consolidated component ablation table
+- `matrix/table7_probes.md`: Pre-registered memory probe accuracy benchmark
+- `risk_profiles/table4_risk_profiles.csv`: Risk mode evaluation
+- `sweeps/table5_top_k.csv`: Working memory capacity sweep ($K \in \{1, 3, 5, 10\}$)
+
+### C. Run Paper Trading Adapter
+```bash
+# Dry run from decision file
+agentic-paper --decisions decisions.csv --budget 100
+
+# Audit current broker positions vs 5-stock universe
+agentic-paper --reconcile
+
+# Live submission to Alpaca Paper Account (requires ALPACA_PAPER_KEY in .env)
+agentic-paper --decisions decisions.csv --budget 100 --execute
+```
+
+---
+
+## 5. Algorithmic Formulations (Quick Reference)
+
+### Retrieval Scoring in `OursMemory`
+$$\text{Score}(E) = \left(r_{\text{source}}(E) + \frac{|\text{Topics}(E) \cap \text{Topics}(Q)|}{\max(|\text{Topics}(Q)|, 1)} + \text{Bonus}_{\text{peer}} + 0.05 \cdot \text{Sentiment}(E), \quad t_E\right)$$
+where $\text{Bonus}_{\text{peer}} = 0.10$ if $E.\text{related\_tickers} \neq \emptyset$ else $0$.
+
+### Contradiction Retirement
+$$\text{Retire}(E_{\text{old}}) \iff \left(E_{\text{old}}.\text{layer} == E_{\text{new}}.\text{layer}\right) \land \left(\text{Topics}(E_{\text{old}}) \cap \text{Topics}(E_{\text{new}}) \neq \emptyset\right) \land \left(s_{\text{old}} \cdot s_{\text{new}} < 0\right)$$
+
+### Decision Outcome Memory
+$$\text{Recall}(Q_{\text{topics}}) = \text{most recent } D \in \text{DecisionHistory} \quad \text{s.t.} \quad D.\text{realized\_return} \neq \text{None} \land \text{Topics}(D) \cap Q_{\text{topics}} \neq \emptyset$$
+When recalled, prompt receives:
+`ID=outcome:YYYY-MM-DD text="Prior similar decision: BUY; realized return: +0.021500"`

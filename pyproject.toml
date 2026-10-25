@@ -7,12 +7,26 @@ name = "agentic-trade-research"
 version = "0.1.0"
 description = "Reproducible memory-based trading research"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.24", "pandas>=2.0", "matplotlib>=3.7", "yfinance>=0.2", "pyyaml>=6.0", "scipy>=1.10"]
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "yfinance>=0.2",
+    "pyyaml>=6.0",
+    "scipy>=1.10",
+    "requests>=2.28",
+    "python-dotenv>=1.0"
+]
+
 [project.optional-dependencies]
 paper = ["alpaca-py>=0.30"]
+test = ["pytest>=8.0"]
+all = ["alpaca-py>=0.30", "pytest>=8.0", "groq>=0.5", "openai>=1.0"]
 
 [project.scripts]
 agentic-trade = "agentic_trade.cli:main"
+agentic-paper = "agentic_trade.paper_trader:main"
+agentic-research = "agentic_trade.research:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
