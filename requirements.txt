@@ -1,0 +1,21 @@
+# Core dependencies for FinMem vs Ours experiment
+numpy>=1.24.0
+pandas>=2.0.0
+yfinance>=0.2.0
+python-dotenv>=1.0.0
+requests>=2.28.0
+
+# LLM and API
+groq>=0.5.0
+openai>=1.0.0
+
+# Optional: Alpaca integration
+alpaca-trade-api>=1.5.0
+
+# Optional: plotting
+matplotlib>=3.7.0
+seaborn>=0.12.0
+pytest>=8.0.0
+pyyaml>=6.0
+scipy>=1.10
+# Optional live paper execution: pip install alpaca-py

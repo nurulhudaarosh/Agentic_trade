@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-trade-research"
+version = "0.1.0"
+description = "Reproducible memory-based trading research"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "pandas>=2.0", "matplotlib>=3.7", "yfinance>=0.2", "pyyaml>=6.0", "scipy>=1.10"]
+[project.optional-dependencies]
+paper = ["alpaca-py>=0.30"]
+
+[project.scripts]
+agentic-trade = "agentic_trade.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
