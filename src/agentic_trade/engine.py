@@ -22,9 +22,9 @@ class ExperimentConfig:
     output_dir: Path = Path("artifacts/offline")
     ticker: str = "TSLA"
     start_date: date = date(2026, 6, 1)
-    train_end: date = date(2026, 8, 31)
-    test_start: date = date(2026, 9, 1)
-    end_date: date = date(2026, 10, 23)
+    train_end: date = date(2026, 6, 15)
+    test_start: date = date(2026, 6, 16)
+    end_date: date = date(2026, 7, 9)
     top_k: int = 5
     trial_id: int = 0
     temperature: float = 0.7
@@ -86,10 +86,30 @@ class ExperimentEngine:
             cache_dir=self.config.llm_cache_dir,
         )
 
+    def _load_relationship_map(self) -> dict[str, set[str]]:
+        path = self.config.data_dir / "relationships.csv"
+        if not path.exists():
+            return {}
+        frame = pd.read_csv(path)
+        missing = {"ticker", "related_tickers"} - set(frame.columns)
+        if missing:
+            raise ValueError(f"{path} missing columns: {sorted(missing)}")
+        mapping: dict[str, set[str]] = {}
+        for _, row in frame.iterrows():
+            ticker = str(row["ticker"]).strip().upper()
+            related = {
+                item.strip().upper()
+                for item in str(row["related_tickers"]).split(",")
+                if item.strip()
+            }
+            if ticker:
+                mapping[ticker] = related
+        return mapping
+
     def load_data(self) -> None:
         frames = []
         for path in sorted(self.config.data_dir.glob("*.csv")):
-            if path.name == "prices.csv":
+            if path.name in {"prices.csv", "relationships.csv"}:
                 continue
             frame = pd.read_csv(path)
             required = {"date", "ticker", "source_type", "text"}
@@ -100,13 +120,32 @@ class ExperimentEngine:
             frames.append(frame)
         if frames:
             raw = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["date", "ticker", "source_type", "text"])
-            related_values = raw["related_tickers"] if "related_tickers" in raw else pd.Series("", index=raw.index)
-            raw["related_tickers"] = related_values.fillna("").map(
-                lambda value: {item.strip().upper() for item in str(value).split(",") if item.strip()}
-            )
+            relationship_map = self._load_relationship_map()
+            if "related_tickers" in raw:
+                existing = raw["related_tickers"].fillna("").map(
+                    lambda value: {item.strip().upper() for item in str(value).split(",") if item.strip()}
+                )
+            else:
+                existing = pd.Series([set() for _ in range(len(raw))], index=raw.index)
+            raw["related_tickers"] = [
+                set(related) | relationship_map.get(str(ticker).strip().upper(), set())
+                for ticker, related in zip(raw["ticker"], existing)
+            ]
             raw = raw[raw["ticker"].eq(self.config.ticker) | raw["related_tickers"].map(lambda tickers: self.config.ticker in tickers)]
             for index, row in raw.iterrows():
-                self.events.append(MemoryEvent(str(index), row["date"], row["ticker"], row["source_type"], str(row["text"]), str(row.get("summary", "")), related_tickers=row["related_tickers"]))
+                source_name = str(row.get("source_name", "") or "")
+                source_category = str(row.get("source_category", "") or "")
+                self.events.append(MemoryEvent(
+                    event_id=str(index),
+                    event_date=row["date"],
+                    ticker=str(row["ticker"]),
+                    source_type=str(row["source_type"]),
+                    text=str(row["text"]),
+                    summary=str(row.get("summary", "") or ""),
+                    related_tickers=set(row["related_tickers"]),
+                    source_name=source_name,
+                    source_category=source_category,
+                ))
         self.events.sort(key=lambda event: (event.event_date, event.event_id))
         self.prices = self._load_prices()
 
@@ -125,10 +164,14 @@ class ExperimentEngine:
             direction = float(prices.loc[future[0]] / prices.loc[event.event_date] - 1)
             if direction == 0 or event.sentiment == 0:
                 continue
-            outcomes.setdefault(event.source_type, []).append(event.sentiment * direction > 0)
-        for source_type, hits in outcomes.items():
-            if len(hits) >= 3:
-                ours.learn_source_reliability(source_type, sum(hits) / len(hits))
+            source = event.source_name if event.source_name and event.source_name != "unknown" else event.source_category
+            outcomes.setdefault(source, []).append(event.sentiment * direction > 0)
+        for source, hits in outcomes.items():
+            if len(hits) >= 2:
+                # Beta-style smoothing toward the neutral 0.7 prior keeps tiny
+                # source samples from producing extreme reliability values.
+                smoothed = (sum(hits) + 2 * 0.7) / (len(hits) + 2)
+                ours.learn_source_reliability(source, smoothed)
 
     def _load_prices(self) -> pd.DataFrame:
         path = self.config.data_dir / "prices.csv"
@@ -158,6 +201,29 @@ class ExperimentEngine:
     def _events_for(self, current_date: date) -> list[MemoryEvent]:
         return [event for event in self.events if event.event_date <= current_date]
 
+    def _ingest_event(self, system: object, event: MemoryEvent) -> None:
+        if system.name != "ours":
+            system.add(event)
+            return
+        copy = MemoryEvent(
+            event.event_id,
+            event.event_date,
+            event.ticker,
+            event.source_type,
+            event.text,
+            event.summary,
+            event.sentiment,
+            set(event.topic_tags),
+            set(event.related_tickers),
+            source_name=event.source_name,
+            source_category=event.source_category,
+        )
+        if not self.config.use_reconciliation:
+            copy.active = True
+            system.events.append(copy)
+        else:
+            system.add(copy)
+
     def _signal(self, memories: list[MemoryEvent], previous_return: float) -> str:
         sentiment = sum(event.sentiment for event in memories) / len(memories) if memories else 0.0
         threshold = {"conservative": 0.25, "standard": 0.15, "aggressive": 0.05}.get(self.config.risk_mode, 0.15)
@@ -175,19 +241,13 @@ class ExperimentEngine:
         for event in self.events:
             if event.event_date <= self.config.train_end:
                 for system in self.systems.values():
-                    copy = event if system.name != "ours" else MemoryEvent(event.event_id, event.event_date, event.ticker, event.source_type, event.text, event.summary, event.sentiment, set(event.topic_tags), set(event.related_tickers))
-                    system.add(copy)
+                    self._ingest_event(system, event)
         test_dates = [d for d in self.prices.index if self.config.test_start <= d <= self.config.end_date]
         for index, current_date in enumerate(test_dates):
             for event in self.events:
                 if event.event_date == current_date:
                     for system in self.systems.values():
-                        copy = event if system.name != "ours" else MemoryEvent(event.event_id, event.event_date, event.ticker, event.source_type, event.text, event.summary, event.sentiment, set(event.topic_tags), set(event.related_tickers))
-                        if system.name == "ours" and not self.config.use_reconciliation:
-                            copy.active = True
-                            system.events.append(copy)
-                        else:
-                            system.add(copy)
+                        self._ingest_event(system, event)
             prev_date = self.prices.index[self.prices.index.get_loc(current_date) - 1] if self.prices.index.get_loc(current_date) > 0 else current_date
             previous_return = float(self.prices.loc[current_date, "close"] / self.prices.loc[prev_date, "close"] - 1) if current_date != prev_date else 0.0
             if index > 0:
@@ -199,7 +259,7 @@ class ExperimentEngine:
             topics = extract_topics(" ".join(event.text for event in self._events_for(current_date)))
             for name, system in self.systems.items():
                 query_topics = topics if self.config.use_topic_matching else set()
-                memories = system.retrieve(current_date, query_topics, self.config.top_k)
+                memories = system.retrieve(current_date, query_topics, self.config.top_k, ticker=self.config.ticker)
                 outcome = None
                 if name == "ours" and self.config.use_outcome_recall:
                     outcome = system.recall(topics)
@@ -210,7 +270,10 @@ class ExperimentEngine:
                 cited = [event.event_id for event in memories[:3]]
                 llm_result = {"action": action, "reasoning": "deterministic policy", "cited_memory_ids": cited, "llm_status": "disabled"}
                 if self.llm is not None:
-                    llm_result = self.llm.decide(name, self.config.ticker, current_date.isoformat(), previous_return, prompt_memories)
+                    try:
+                        llm_result = self.llm.decide(name, self.config.ticker, current_date.isoformat(), previous_return, prompt_memories, risk_mode=self.config.risk_mode)
+                    except TypeError:
+                        llm_result = self.llm.decide(name, self.config.ticker, current_date.isoformat(), previous_return, prompt_memories)
                     action = llm_result["action"]
                     cited = llm_result.get("cited_memory_ids", cited)
                 if self.config.risk_mode == "conservative" and memories and abs(sum(event.sentiment for event in memories) / len(memories)) < 0.25:
@@ -222,7 +285,7 @@ class ExperimentEngine:
                 row = {"date": current_date.isoformat(), "decision": action, "position": position, "price": float(self.prices.loc[current_date, "close"]), "next_return": realized, "daily_return": daily_return, "cited_memory_ids": cited, "reasoning": llm_result["reasoning"], "llm_status": llm_result["llm_status"], "trial_id": self.config.trial_id, "risk_mode": self.config.risk_mode, "top_k": self.config.top_k}
                 self.results[name].append(row)
                 for rank, event in enumerate(memories, 1):
-                    self.evidence.append({"date": current_date.isoformat(), "memory_id": event.event_id, "layer": event.layer, "source": event.source_type, "text": event.text[:280], "topic": ";".join(sorted(event.topic_tags)), "related_tickers": ";".join(sorted(event.related_tickers)), "reliability": event.source_reliability if self.config.use_provenance else 1.0, "active": event.active, "rank": rank, "score": float(event.source_reliability), "cited": event.event_id in cited, "decision": action, "realized_return": realized, "system": name, "ticker": self.config.ticker, "outcome_recalled": outcome is not None})
+                    self.evidence.append({"date": current_date.isoformat(), "memory_id": event.event_id, "layer": event.layer, "source": event.source_name if event.source_name and event.source_name != "unknown" else event.source_category, "source_type": event.source_type, "text": event.text[:280], "topic": ";".join(sorted(event.topic_tags)), "related_tickers": ";".join(sorted(event.related_tickers)), "reliability": event.source_reliability if self.config.use_provenance else 1.0, "active": event.active, "rank": rank, "score": float(event.source_reliability), "cited": event.event_id in cited, "decision": action, "realized_return": realized, "system": name, "ticker": self.config.ticker, "outcome_recalled": outcome is not None})
                 if name == "ours":
                     system.record_decision({"date": current_date.isoformat(), "action": action, "topics": sorted(topics), "realized_return": None})
         metrics = {name: self._metrics(rows) for name, rows in self.results.items()}
@@ -284,6 +347,25 @@ class ExperimentEngine:
         fig.savefig(self.config.output_dir / "metric_comparison.png", dpi=180)
         fig.savefig(figure_dir / "metric_comparison.png", dpi=180)
         plt.close(fig)
+
+def load_all_events(data_dir: Path | str, tickers: Iterable[str]) -> list[MemoryEvent]:
+    """Load and merge events for a ticker universe without the single-ticker filter."""
+    merged: dict[tuple, MemoryEvent] = {}
+    for ticker in tickers:
+        ticker = ticker.strip().upper()
+        if not ticker:
+            continue
+        engine = ExperimentEngine(ExperimentConfig(data_dir=Path(data_dir), ticker=ticker))
+        engine.load_data()
+        for event in engine.events:
+            key = (event.ticker, event.event_date, event.source_type, event.text)
+            if key in merged:
+                merged[key].related_tickers |= event.related_tickers
+                merged[key].topic_tags |= event.topic_tags
+            else:
+                merged[key] = event
+    return sorted(merged.values(), key=lambda event: (event.event_date, event.ticker, event.event_id))
+
 
 def run_experiment(config: ExperimentConfig | None = None) -> dict[str, dict]:
     engine = ExperimentEngine(config or ExperimentConfig())

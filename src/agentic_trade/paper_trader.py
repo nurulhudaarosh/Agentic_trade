@@ -31,21 +31,35 @@ class TradingConfig:
 
 
 class PaperBroker:
-    """Alpaca paper broker adapter. Never connects to live trading endpoints."""
+    """Alpaca broker adapter. Paper trading is the default; live requires explicit opt-in."""
 
-    def __init__(self, execute: bool = False) -> None:
+    def __init__(self, execute: bool = False, paper: bool = True) -> None:
         self.execute = execute
+        self.paper = paper
         self.client: Any = None
         if execute:
-            api_key = os.environ.get("ALPACA_PAPER_KEY") or os.environ.get("ALPACA_KEY")
-            api_secret = os.environ.get("ALPACA_PAPER_SECRET") or os.environ.get("ALPACA_SECRET")
+            if not paper and os.environ.get("ALPACA_LIVE_CONFIRM") != "YES":
+                raise RuntimeError(
+                    "Refusing to place live orders. Set ALPACA_LIVE_CONFIRM=YES and use real-money "
+                    "ALPACA_KEY/ALPACA_SECRET credentials to opt in."
+                )
+            api_key = (
+                os.environ.get("ALPACA_PAPER_KEY") or os.environ.get("ALPACA_KEY")
+                if paper
+                else os.environ.get("ALPACA_KEY")
+            )
+            api_secret = (
+                os.environ.get("ALPACA_PAPER_SECRET") or os.environ.get("ALPACA_SECRET")
+                if paper
+                else os.environ.get("ALPACA_SECRET")
+            )
             if not api_key or not api_secret:
-                raise RuntimeError("Set ALPACA_PAPER_KEY and ALPACA_PAPER_SECRET before --execute")
+                raise RuntimeError("Set Alpaca API key and secret before --execute")
             try:
                 from alpaca.trading.client import TradingClient
             except ImportError as exc:
                 raise RuntimeError("Install alpaca-py before --execute") from exc
-            self.client = TradingClient(api_key, api_secret, paper=True)
+            self.client = TradingClient(api_key, api_secret, paper=paper)
 
     def submit_market_buy(self, ticker: str, notional: float) -> dict[str, Any]:
         if not self.execute:
@@ -117,9 +131,9 @@ class PaperTradingAgent:
         self.broker = broker
 
     def validate(self) -> None:
-        if len(self.config.tickers) != 5:
-            raise ValueError("Exactly five tickers are required")
-        if len(set(self.config.tickers)) != 5:
+        if not self.config.tickers:
+            raise ValueError("At least one ticker is required")
+        if len(set(self.config.tickers)) != len(self.config.tickers):
             raise ValueError("Tickers must be unique")
         if self.config.budget <= 0:
             raise ValueError("Budget must be positive")
@@ -185,7 +199,7 @@ class PaperTradingAgent:
         reconciled = {
             "monitored_positions": {s: pos_by_symbol[s] for s in universe if s in pos_by_symbol},
             "unmonitored_positions": {s: p for s, p in pos_by_symbol.items() if s not in universe},
-            "mode": "paper_execute" if self.broker.execute else "dry_run",
+            "mode": ("live_execute" if not self.broker.paper else "paper_execute") if self.broker.execute else "dry_run",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return reconciled
@@ -207,13 +221,14 @@ def main() -> None:
     parser.add_argument("--decisions", type=Path, help="CSV with ticker,decision columns")
     parser.add_argument("--audit-path", type=Path, default=Path("artifacts/paper_trading/orders.jsonl"))
     parser.add_argument("--execute", action="store_true", help="Submit to Alpaca paper account; otherwise dry-run")
+    parser.add_argument("--live", action="store_true", help="Use the live Alpaca account (requires ALPACA_LIVE_CONFIRM=YES)")
     parser.add_argument("--allow-short", action="store_true", help="Allow short selling if no long position exists")
     parser.add_argument("--reconcile", action="store_true", help="Audit current broker positions against universe")
     parser.add_argument("--status", nargs="*", metavar="ORDER_ID", help="Read existing order status and positions; never submits")
     args = parser.parse_args()
     tickers = tuple(item.strip().upper() for item in args.tickers.split(",") if item.strip())
     config = TradingConfig(tickers=tickers, budget=args.budget, audit_path=args.audit_path, allow_short=args.allow_short)
-    broker = PaperBroker(execute=args.execute or args.status is not None)
+    broker = PaperBroker(execute=args.execute or args.status is not None, paper=not args.live)
     agent = PaperTradingAgent(config, broker)
 
     if args.reconcile:
@@ -226,7 +241,8 @@ def main() -> None:
 
     decisions = _latest_decisions(args.decisions, tickers) if args.decisions else {ticker: "Hold" for ticker in tickers}
     results = agent.execute_decisions(decisions)
-    print(json.dumps({"mode": "paper_execute" if args.execute else "dry_run", "results": results}, indent=2))
+    mode = "dry_run" if not args.execute else ("live_execute" if args.live else "paper_execute")
+    print(json.dumps({"mode": mode, "results": results}, indent=2))
 
 
 if __name__ == "__main__":

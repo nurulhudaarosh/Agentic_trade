@@ -71,6 +71,7 @@ def fetch_news(
                     "source_type": "news",
                     "text": article.get("headline", ""),
                     "summary": article.get("summary", ""),
+                    "source_name": article.get("source", ""),
                     "source_id": article.get("id", ""),
                 })
 
@@ -79,7 +80,7 @@ def fetch_news(
             if not page_token:
                 break
 
-    frame = pd.DataFrame(rows, columns=["date", "ticker", "source_type", "text", "summary", "source_id"])
+    frame = pd.DataFrame(rows, columns=["date", "ticker", "source_type", "text", "summary", "source_name", "source_id"])
     if frame.empty:
         raise RuntimeError("Alpaca returned no news rows for the requested tickers/window")
     return frame.drop_duplicates(subset=["date", "ticker", "text"]).sort_values(["ticker", "date", "source_id"])

@@ -11,8 +11,97 @@ TOPICS = {
     "mergers_acquisitions": ("merger", "acquisition", "buyout", "takeover", "spac"),
     "capital_return": ("dividend", "buyback", "shareholder"),
 }
-POSITIVE = ("beat", "strong", "growth", "upgrade", "raised", "profit", "positive", "surge", "approval")
-NEGATIVE = ("miss", "weak", "downgrade", "lowered", "loss", "negative", "lawsuit", "risk", "fall")
+POSITIVE = (
+    "beat", "beats", "strong", "growth", "grow", "upgrade", "raised", "raise", "profit",
+    "positive", "surge", "approval", "record", "rally", "jump", "soar", "gain", "wins",
+    "partnership", "expansion", "buyback", "dividend", "outperform", "bullish", "tops",
+)
+NEGATIVE = (
+    "miss", "misses", "weak", "downgrade", "lowered", "cut", "cuts", "loss", "negative",
+    "lawsuit", "sued", "risk", "fall", "falls", "drop", "plunge", "slump", "decline",
+    "probe", "investigation", "recall", "halt", "delay", "warning", "fraud", "penalty",
+    "bearish", "selloff", "crash",
+)
+
+PUBLISHERS = (
+    "Bloomberg",
+    "Reuters",
+    "Wall Street Journal",
+    "WSJ",
+    "Benzinga",
+    "CNBC",
+    "Barron's",
+    "MarketWatch",
+    "Financial Times",
+    "The Motley Fool",
+    "Seeking Alpha",
+    "Insider Monkey",
+    "Business Wire",
+    "GlobeNewswire",
+    "PR Newswire",
+    "Investor's Business Daily",
+    "Yahoo Finance",
+    "TheStreet",
+    "TipRanks",
+    "Zacks",
+    "Dow Jones",
+    "TechCrunch",
+)
+
+
+PRESS_RELEASE_MARKERS = (
+    "announces",
+    "announced",
+    "declares",
+    "to participate",
+    "to present",
+    "will host",
+    "conference call",
+    "webcast",
+    "schedules",
+    "files for",
+    "files s-1",
+    "files an s-1",
+)
+ANALYST_MARKERS = (
+    "analyst",
+    "price target",
+    "upgrade",
+    "downgrade",
+    "initiates coverage",
+    "rating",
+    "maintains",
+)
+
+
+def infer_source_name(text: str) -> str:
+    """Best-effort publisher attribution from an article headline/summary.
+
+    Alpaca's news feed normally provides a source field; this fallback keeps the
+    checked-in offline data usable for source-level provenance learning.
+    """
+    lowered = text.lower()
+    for publisher in sorted(PUBLISHERS, key=len, reverse=True):
+        if publisher.lower() in lowered:
+            return publisher
+    return "unknown"
+
+
+def infer_source_category(text: str) -> str:
+    """Coarse source genre used when publisher attribution is unavailable."""
+    lowered = text.lower()
+    if any(marker in lowered for marker in PRESS_RELEASE_MARKERS):
+        return "press_release"
+    if any(marker in lowered for marker in ANALYST_MARKERS):
+        return "analyst_note"
+    return "media"
+
+
+def event_matches_ticker(event: "MemoryEvent", ticker: str | None) -> bool:
+    if ticker is None:
+        return True
+    return event.ticker == ticker or ticker in event.related_tickers
+
 
 @dataclass
 class MemoryEvent:
@@ -28,6 +117,8 @@ class MemoryEvent:
     source_reliability: float = 0.7
     layer: str = "shallow"
     active: bool = True
+    source_name: str = ""
+    source_category: str = ""
 
     def __post_init__(self) -> None:
         self.layer = {"10-Q": "intermediate", "10-K": "deep"}.get(self.source_type, "shallow")
@@ -35,6 +126,10 @@ class MemoryEvent:
             self.topic_tags = extract_topics(f"{self.text} {self.summary}")
         if self.sentiment == 0.0:
             self.sentiment = infer_sentiment(f"{self.text} {self.summary}")
+        if not self.source_name:
+            self.source_name = infer_source_name(f"{self.text} {self.summary}")
+        if not self.source_category:
+            self.source_category = infer_source_category(f"{self.text} {self.summary}")
         self.source_reliability = {"news": 0.7, "10-Q": 0.9, "10-K": 1.0}.get(self.source_type, 0.5)
 
 
@@ -61,15 +156,17 @@ class MemorySystem:
     def add(self, event: MemoryEvent) -> None:
         self.events.append(event)
 
-    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5) -> list[MemoryEvent]:
-        allowed = set(topics)
-        visible = [event for event in self.events if event.active and event.event_date <= as_of]
+    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5, ticker: str | None = None) -> list[MemoryEvent]:
+        visible = [
+            event for event in self.events
+            if event.active and event.event_date <= as_of and event_matches_ticker(event, ticker)
+        ]
         return sorted(visible, key=lambda event: (event.event_date, event.source_reliability), reverse=True)[:top_k]
 
 
 class NoMemory(MemorySystem):
     name = "no_memory"
-    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5) -> list[MemoryEvent]:
+    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5, ticker: str | None = None) -> list[MemoryEvent]:
         return []
 
 
@@ -79,9 +176,11 @@ class PlainRAG(MemorySystem):
 
 class FinMem(MemorySystem):
     name = "fin_mem"
-    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5) -> list[MemoryEvent]:
-        allowed = set(topics)
-        visible = [event for event in self.events if event.active and event.event_date <= as_of]
+    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5, ticker: str | None = None) -> list[MemoryEvent]:
+        visible = [
+            event for event in self.events
+            if event.active and event.event_date <= as_of and event_matches_ticker(event, ticker)
+        ]
         return sorted(
             visible,
             key=lambda event: (event.event_date, event.source_reliability, event.layer == "deep"),
@@ -102,8 +201,13 @@ class OursMemory(FinMem):
         self.source_reliability[source_type] = max(0.5, min(1.0, hit_rate))
 
     def add(self, event: MemoryEvent) -> None:
-        if event.source_type in self.source_reliability:
-            event.source_reliability = self.source_reliability[event.source_type]
+        learned = (
+            self.source_reliability.get(event.source_name)
+            or self.source_reliability.get(event.source_category)
+            or self.source_reliability.get(event.source_type)
+        )
+        if learned is not None:
+            event.source_reliability = learned
         for old in self.events:
             if old.active and old.event_date <= event.event_date and old.layer == event.layer:
                 if old.topic_tags & event.topic_tags and old.sentiment * event.sentiment < 0:
@@ -111,12 +215,19 @@ class OursMemory(FinMem):
                     self.retired_events.append(old)
         super().add(event)
 
-    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5) -> list[MemoryEvent]:
+    def retrieve(self, as_of: date, topics: Iterable[str] = (), top_k: int = 5, ticker: str | None = None) -> list[MemoryEvent]:
         allowed = set(topics)
-        visible = [event for event in self.events if event.active and event.event_date <= as_of]
+        visible = [
+            event for event in self.events
+            if event.active and event.event_date <= as_of and event_matches_ticker(event, ticker)
+        ]
         def score(event: MemoryEvent) -> tuple[float, date]:
             topic_score = len(event.topic_tags & allowed) / max(len(allowed), 1)
-            relationship_score = 0.1 if event.related_tickers else 0.0
+            relationship_score = (
+                0.1
+                if ticker and event.ticker != ticker and ticker in event.related_tickers
+                else 0.0
+            )
             return ((event.source_reliability + topic_score + relationship_score + event.sentiment * 0.05), event.event_date)
         return sorted(visible, key=score, reverse=True)[:top_k]
 

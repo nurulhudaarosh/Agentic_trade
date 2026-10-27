@@ -37,6 +37,19 @@ def test_evaluate_probes_metrics():
     assert results["ours"]["mrr"] == 0.5
 
 
+def test_probes_do_not_match_unrelated_tickers():
+    events = [
+        MemoryEvent("msft", date(2026, 6, 1), "MSFT", "news", "Microsoft cloud revenue beat"),
+    ]
+    ours = OursMemory()
+    for event in events:
+        ours.add(event)
+    probe = ProbeItem("TSLA-X", "TSLA", "cloud revenue", {"earnings"}, ("cloud", "revenue"), date(2026, 6, 5))
+    results = evaluate_probes({"ours": ours}, [probe], top_k=5)
+    assert results["ours"]["hit_at_1"] == 0.0
+    assert results["ours"]["mrr"] == 0.0
+
+
 def test_run_probe_benchmark_file_outputs(tmp_path: Path):
     events = [
         MemoryEvent("e1", date(2026, 6, 1), "TSLA", "news", "Tesla battery supplier Panasonic raises cell production"),

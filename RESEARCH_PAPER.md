@@ -10,7 +10,7 @@ We address these structural deficiencies by introducing four core memory novelti
 3. **Resolved Episodic Decision Outcome Recall**: Binding actual $t+1$ realized returns to past decisions and recalling similar past decisions into future prompt contexts.
 4. **Multi-Ticker Graph & Supply Chain Awareness**: Augmenting corporate network knowledge by indexing peer disclosures (`related_tickers`).
 
-Across extensive offline backtests, multi-ticker trials (TSLA, NFLX, AMZN, MSFT, COIN), parameter sweeps, component ablations, and a 25-query pre-registered memory probe benchmark, our architecture doubles top-1 retrieval accuracy ($32\%$ vs. $16\%$), achieves over $2.4\times$ retrieval precision ($21.6\%$ vs. $8.8\%$), and provides strict point-in-time leakage protection.
+Across offline backtests on five tickers (TSLA, NFLX, AMZN, MSFT, COIN), parameter sweeps, component ablations, and a 17-query ticker-scoped memory probe benchmark, our architecture improves top-1 retrieval accuracy ($29.4\%$ vs. $11.8\%$) and precision ($17.6\%$ vs. $10.6\%$), and provides strict point-in-time leakage protection. Trading returns are mixed: the full system is best on TSLA but worse on NFLX and MSFT, and the pooled paired difference versus the strongest baseline is not statistically significant ($p=0.50$). We report this negative/inconclusive result rather than selecting a favourable subset.
 
 ---
 
@@ -99,51 +99,53 @@ where $\text{Bonus}_{\text{peer}}(E) = 0.10$ if target ticker $\in E.\text{relat
 ## 4. Empirical Evaluation & Tables
 
 ### A. Baseline Offline Experiment (TSLA)
-Tested under strict point-in-time constraints on checked-in TSLA data ($T_{\text{train}}: \text{2026-06-01 to 2026-08-31}$; $T_{\text{test}}: \text{2026-09-01 to 2026-10-23}$):
+Tested under strict point-in-time constraints on checked-in TSLA data ($T_{\text{train}}: \text{2026-06-01 to 2026-06-15}$; $T_{\text{test}}: \text{2026-06-16 to 2026-07-09}$). The window is chosen so that test-period news exists; the earlier `2026-09/10` window contained no events and was removed.
 
 | System | Cumulative Return | Sharpe Ratio | Annualized Volatility | Max Drawdown | Hold Rate | Decisions Recalled | Facts Retired |
 | :--- | ---:| ---:| ---:| ---:| ---:| ---:| ---:|
-| `no_memory` | -1.22% | -0.14 | 28.79% | -10.22% | 42.11% | 0 | 0 |
-| `plain_rag` | -2.95% | -0.57 | 28.09% | -9.75% | 52.63% | 0 | 0 |
-| `fin_mem` | -2.95% | -0.57 | 28.09% | -9.75% | 52.63% | 0 | 0 |
-| `ours` | -10.36% | -1.77 | 37.09% | -17.39% | 0.00% | **37** | 0 |
-| `buy_and_hold` | +4.53% | +0.97 | 37.25% | -7.31% | 0.00% | - | - |
+| `no_memory` | -10.13% | -2.30 | 64.32% | -18.01% | 6.25% | 0 | 0 |
+| `plain_rag` | -6.00% | -2.36 | 38.30% | -11.38% | 31.25% | 0 | 0 |
+| `fin_mem` | -6.00% | -2.36 | 38.30% | -11.38% | 31.25% | 0 | 0 |
+| `ours` | **+0.47%** | **0.42** | 65.21% | **-7.49%** | 0.00% | **15** | **12** |
+| `buy_and_hold` | +0.47% | +0.42 | 65.21% | -7.49% | 0.00% | - | - |
+
+`ours` matches buy-and-hold on this single ticker because its deterministic policy is net-long throughout the test window.
 
 ---
 
-### B. Table 2: Multi-Ticker 3-Trial Performance Comparison & Wilcoxon Significance
+### B. Table 2: Multi-Ticker Paired Comparison
 
-Across 5 distinct tickers (TSLA, NFLX, AMZN, MSFT, COIN) over 3 seeded trials ($N=15$ runs per system), evaluated against the paired Wilcoxon signed-rank test:
+The deterministic backbone ignores temperature, so repeating it would produce identical pseudo-trials. We therefore run one deterministic trial per ticker and pool the paired daily differences across `(ticker, date)` observations.
 
 | Ticker | System | Return | Sharpe Ratio | Volatility | Max Drawdown | Hold Rate |
 | :--- | :--- | ---:| ---:| ---:| ---:| ---:|
-| **TSLA** | `no_memory` | -0.0122 | -0.14 | 0.2879 | -0.1022 | 0.42 |
-| | `plain_rag` | -0.0295 | -0.57 | 0.2809 | -0.0975 | 0.53 |
-| | `fin_mem` | -0.0295 | -0.57 | 0.2809 | -0.0975 | 0.53 |
-| | `ours` | -0.1036* | -1.77 | 0.3709 | -0.1739 | 0.00 |
-| | `buy_and_hold` | **0.0453** | 0.97 | 0.3725 | -0.0731 | 0.00 |
-| **NFLX** | `no_memory` | **0.0894** | 2.01 | 0.3047 | -0.0568 | 0.29 |
-| | `plain_rag` | -0.1851 | -3.60 | 0.3582 | -0.2138 | 0.00 |
-| | `fin_mem` | -0.1851 | -3.60 | 0.3582 | -0.2138 | 0.00 |
-| | `ours` | -0.1851* | -3.60 | 0.3582 | -0.2138 | 0.00 |
-| | `buy_and_hold` | -0.1851 | -3.60 | 0.3582 | -0.2138 | 0.00 |
-| **AMZN** | `no_memory` | -0.0445 | -1.36 | 0.2069 | -0.1109 | 0.39 |
-| | `plain_rag` | **-0.0271** | -0.52 | 0.2778 | -0.0557 | 0.00 |
-| | `fin_mem` | **-0.0271** | -0.52 | 0.2778 | -0.0557 | 0.00 |
-| | `ours` | -0.0775* | -3.01 | 0.1725 | -0.0937 | 0.61 |
-| | `buy_and_hold` | **-0.0271** | -0.52 | 0.2778 | -0.0557 | 0.00 |
-| **MSFT** | `no_memory` | -0.0850 | -4.19 | 0.1382 | -0.0926 | 0.50 |
-| | `plain_rag` | **0.0469** | 1.49 | 0.2202 | -0.0412 | 0.00 |
-| | `fin_mem` | **0.0469** | 1.49 | 0.2202 | -0.0412 | 0.00 |
-| | `ours` | **0.0469*** | 1.49 | 0.2202 | -0.0412 | 0.00 |
-| | `buy_and_hold` | **0.0469** | 1.49 | 0.2202 | -0.0412 | 0.00 |
-| **COIN** | `no_memory` | -0.2133 | -1.78 | 0.5401 | -0.2642 | 0.42 |
-| | `plain_rag` | -0.0526 | -0.13 | 0.7011 | -0.1857 | 0.00 |
-| | `fin_mem` | -0.0526 | -0.13 | 0.7011 | -0.1857 | 0.00 |
-| | `ours` | **-0.0526***| -0.13 | 0.7011 | -0.1857 | 0.00 |
-| | `buy_and_hold` | -0.0526 | -0.13 | 0.7011 | -0.1857 | 0.00 |
+| **TSLA** | `no_memory` | -0.1013 | -2.30 | 0.6432 | -0.1801 | 0.06 |
+| | `plain_rag` | -0.0600 | -2.36 | 0.3830 | -0.1138 | 0.31 |
+| | `fin_mem` | -0.0600 | -2.36 | 0.3830 | -0.1138 | 0.31 |
+| | `ours` | **0.0047** | 0.42 | 0.6521 | **-0.0749** | 0.00 |
+| | `buy_and_hold` | **0.0047** | 0.42 | 0.6521 | -0.0749 | 0.00 |
+| **NFLX** | `no_memory` | -0.0290 | -1.25 | 0.3302 | -0.0789 | 0.38 |
+| | `plain_rag` | **0.0307** | 1.37 | 0.4043 | **-0.0582** | 0.19 |
+| | `fin_mem` | **0.0307** | 1.37 | 0.4043 | -0.0582 | 0.19 |
+| | `ours` | -0.0413 | -1.33 | 0.4321 | -0.0837 | 0.00 |
+| | `buy_and_hold` | -0.0413 | -1.33 | 0.4321 | -0.0837 | 0.00 |
+| **AMZN** | `no_memory` | -0.0779 | -4.52 | 0.2738 | -0.1034 | 0.50 |
+| | `plain_rag` | **0.0158** | 0.90 | 0.3331 | **-0.0529** | 0.12 |
+| | `fin_mem` | **0.0158** | 0.90 | 0.3331 | -0.0529 | 0.12 |
+| | `ours` | 0.0042 | 0.36 | 0.3569 | -0.0711 | 0.00 |
+| | `buy_and_hold` | 0.0042 | 0.36 | 0.3569 | -0.0711 | 0.00 |
+| **MSFT** | `no_memory` | **-0.0203** | -0.69 | 0.3727 | -0.0871 | 0.25 |
+| | `plain_rag` | -0.0240 | -0.77 | 0.3995 | -0.0700 | 0.00 |
+| | `fin_mem` | -0.0240 | -0.77 | 0.3995 | -0.0700 | 0.00 |
+| | `ours` | -0.0701 | -3.62 | 0.3034 | -0.0760 | 0.50 |
+| | `buy_and_hold` | -0.0240 | -0.77 | 0.3995 | -0.0700 | 0.00 |
+| **COIN** | `no_memory` | **-0.0033** | 0.19 | 0.5892 | -0.1478 | 0.19 |
+| | `plain_rag` | -0.0640 | -1.39 | 0.6185 | -0.1358 | 0.00 |
+| | `fin_mem` | -0.0640 | -1.39 | 0.6185 | -0.1358 | 0.00 |
+| | `ours` | -0.0640 | -1.39 | 0.6185 | -0.1358 | 0.00 |
+| | `buy_and_hold` | -0.0640 | -1.39 | 0.6185 | -0.1358 | 0.00 |
 
-*Paired Wilcoxon Signed-Rank Test (`Ours` vs. Second Best Baseline `no_memory`): $W = 20856.0, \; p = 0.0492 < 0.05$ (Statistically Significant).*
+*Paired Wilcoxon Signed-Rank Test (`Ours` vs. strongest baseline, `plain_rag`): $W = 274.0, \; p = 0.502$ (not significant). `Ours` beats the memory baselines on TSLA and AMZN but loses on NFLX and MSFT; no significant pooled advantage is claimed.*
 
 ---
 
@@ -152,9 +154,18 @@ Comparison across risk inclinations on TSLA:
 
 | Risk Profile | Cumulative Return | Sharpe Ratio | Volatility | Max Drawdown | Hold Rate |
 | :--- | ---:| ---:| ---:| ---:| ---:|
-| **Conservative** (50% position scale, strict threshold) | -0.0532 | -1.77 | 0.1854 | -0.0911 | 0.00 |
-| **Standard** (Full signal scale) | -0.1036 | -1.77 | 0.3709 | -0.1739 | 0.00 |
-| **Aggressive** (Low threshold) | -0.1036 | -1.77 | 0.3709 | -0.1739 | 0.00 |
+| **Conservative** (50% position scale, strict threshold) | 0.0000 | 0.00 | 0.0000 | 0.0000 | 1.00 |
+| **Standard** (Full signal scale) | 0.0047 | 0.42 | 0.6521 | -0.0749 | 0.00 |
+| **Aggressive** (Low threshold) | 0.0047 | 0.42 | 0.6521 | -0.0749 | 0.00 |
+
+Conservative collapses to all-`Hold` on this sample under the deterministic policy due to the strict sentiment threshold ($\pm 0.25$); standard and aggressive produce the same actions.
+
+**LLM Character Design & Prompt Directives:**
+To mirror FinMem's profiling module in real LLM inference, we introduce differentiated system prompts and risk directives in `src/agentic_trade/llm.py`:
+- **Aggressive (Alpha-Seeking)**: Explicitly instructed to exploit catalysts and positive momentum, prioritizing active `Buy` and `Sell` positions over passive `Hold` unless evidence is purely neutral.
+- **Standard (Balanced)**: Weighs retrieved evidence, learned source reliability ($r_s$), and price momentum proportionally.
+- **Conservative (Capital Preservation)**: Instructed to avoid drawdowns and default to `Hold` whenever signals are conflicting or ambiguous.
+- Caching is explicitly partitioned by `risk_mode` to ensure distinct character-driven trajectories.
 
 ---
 
@@ -162,39 +173,41 @@ Comparison across risk inclinations on TSLA:
 
 | Capacity ($K$) | Cumulative Return | Sharpe Ratio | Volatility | Max Drawdown | Hold Rate |
 | :--- | ---:| ---:| ---:| ---:| ---:|
-| $K = 1$ | -0.1036 | -1.77 | 0.3709 | -0.1739 | 0.00 |
-| $K = 3$ | -0.1036 | -1.77 | 0.3709 | -0.1739 | 0.00 |
-| $K = 5$ (Default) | -0.1036 | -1.77 | 0.3709 | -0.1739 | 0.00 |
-| $K = 10$ | -0.1036 | -1.77 | 0.3709 | -0.1739 | 0.00 |
+| $K = 1$ | -0.0600 | -2.36 | 0.3830 | -0.1138 | 0.31 |
+| $K = 3$ | **0.0047** | **0.42** | 0.6521 | **-0.0749** | 0.00 |
+| $K = 5$ (Default) | **0.0047** | **0.42** | 0.6521 | -0.0749 | 0.00 |
+| $K = 10$ | -0.0600 | -2.36 | 0.3830 | -0.1138 | 0.31 |
 
 ---
 
 ### E. Table 6: Component Ablation Study
 
-Evaluating the contribution of each individual novel mechanism by isolating its ablation on TSLA:
+Evaluating the contribution of each novel mechanism on TSLA. Return deltas are relative to the full system; `facts_retired` and `decisions_recalled` diagnose whether a mechanism was exercised at all.
 
-| Configuration | Return | Sharpe | Volatility | Drawdown | Delta Return |
-| :--- | ---:| ---:| ---:| ---:| ---:|
-| **Full System (Ours)** | -0.1036 | -1.77 | 0.3709 | -0.1739 | — |
-| **w/o Learned Provenance** (`use_provenance=False`) | -0.1036 | -1.77 | 0.3709 | -0.1739 | +0.0000 |
-| **w/o Contradiction Retirement** (`use_reconciliation=False`) | -0.1036 | -1.77 | 0.3709 | -0.1739 | +0.0000 |
-| **w/o Decision Recall** (`use_outcome_recall=False`) | -0.1036 | -1.77 | 0.3709 | -0.1739 | +0.0000 |
-| **w/o Topic Matching** (`use_topic_matching=False`) | +0.0453 | +0.97 | 0.3725 | -0.0731 | +0.1489 |
+| Configuration | Return | Sharpe | Volatility | Drawdown | Delta Return | Facts Retired | Decisions Recalled |
+| :--- | ---:| ---:| ---:| ---:| ---:| ---:| ---:|
+| **Full System (Ours)** | **0.0047** | **0.42** | 0.6521 | **-0.0749** | — | 12 | 15 |
+| **w/o Learned Provenance** (`use_provenance=False`) | -0.0600 | -2.36 | 0.3830 | -0.1138 | -0.0647 | 12 | 15 |
+| **w/o Contradiction Retirement** (`use_reconciliation=False`) | 0.0047 | 0.42 | 0.6521 | -0.0749 | +0.0000 | 0 | 15 |
+| **w/o Decision Recall** (`use_outcome_recall=False`) | 0.0047 | 0.42 | 0.6521 | -0.0749 | +0.0000 | 12 | 0 |
+| **w/o Topic Matching** (`use_topic_matching=False`) | 0.0047 | 0.42 | 0.6521 | -0.0749 | +0.0000 | 12 | 15 |
+
+Contradiction retirement and decision recall are active (12 facts retired, 15 decisions recalled) but do not change deterministic PnL. Decision recall only enters the LLM prompt; it cannot affect the rule-based signal.
 
 ---
 
 ### F. Table 7: Memory Probe Retrieval Accuracy Benchmark
 
-Direct retrieval evaluation on 25 pre-registered corporate relationship, guidance, and regulatory probe queries across all 5 tickers:
+Direct retrieval evaluation on 17 ticker-scoped, pre-registered relationship/guidance/legal-risk queries. Probes may only retrieve events from their own ticker or from an explicitly related ticker.
 
 | System | Hit@1 | Hit@3 | Hit@5 | Mean Reciprocal Rank (MRR) | Precision@5 |
 | :--- | ---:| ---:| ---:| ---:| ---:|
 | `no_memory` | 0.00% | 0.00% | 0.00% | 0.0000 | 0.00% |
-| `plain_rag` | 16.00% | 28.00% | 28.00% | 0.2133 | 8.80% |
-| `fin_mem` | 16.00% | 28.00% | 28.00% | 0.2133 | 8.80% |
-| **`ours`** | **32.00%** | **48.00%** | **60.00%** | **0.4167** | **21.60%** |
+| `plain_rag` | 11.76% | 29.41% | 35.29% | 0.1980 | 10.59% |
+| `fin_mem` | 11.76% | 29.41% | 35.29% | 0.1980 | 10.59% |
+| **`ours`** | **29.41%** | **41.18%** | **47.06%** | **0.3578** | **17.65%** |
 
-**Key Finding**: In direct memory retrieval accuracy, **`Ours` achieves double the Top-1 Hit Rate ($32\%$ vs. $16\%$), nearly double the MRR ($0.4167$ vs. $0.2133$), and over $2.4\times$ the precision ($21.6\%$ vs. $8.8\%$)** compared to FinMem and Plain RAG.
+**Key Finding**: After removing cross-ticker contamination, `Ours` improves Top-1 Hit Rate ($29.4\%$ vs. $11.8\%$), MRR ($0.358$ vs. $0.198$), and Precision@5 ($17.6\%$ vs. $10.6\%$). `fin_mem` equals `plain_rag` because the checked-in snapshot contains only news, so no intermediate/deep memories exist.
 
 ---
 
@@ -205,14 +218,19 @@ While FinMem concluded at theoretical action signals, our framework provides a c
 - **Position-Aware Selling**: A `Sell` decision queries the broker; if an open long position exists, it closes the position. If no position exists, it skips execution unless `--allow-short` is explicitly enabled.
 - **Portfolio Reconciliation**: The `--reconcile` command audits current broker positions against the target universe to catch unmonitored positions or execution drift.
 - **Audit Logging**: All orders append to `artifacts/paper_trading/orders.jsonl` with ISO-8601 UTC timestamps.
+- **Groq LLM Decisions**: `agentic-live` generates per-ticker actions with a Groq model, persists resolved outcomes for episodic recall, and executes through the same adapter.
+- **Live-Money Guard**: `--live` alone is insufficient; `ALPACA_LIVE_CONFIRM=YES` must also be set or the broker refuses to connect. Paper trading is the default.
 
 ---
 
 ## 6. Reproducibility & Research Integrity
 
 1. **No Data Leakage**: Events are timestamped; no future price or news disclosure is accessible prior to its occurrence.
-2. **Deterministic Baseline**: The offline pipeline runs with standard library math and numpy without random seed divergence.
-3. **Open Architecture**: Can run 100% offline with checked-in data, or scale to live APIs (Alpaca, Groq, OpenRouter) via environment variables without hardcoded credentials.
+2. **Deterministic Baseline**: The offline pipeline runs with standard library math and numpy without random seed divergence. Deterministic experiments are single-trial; repeated `temperature` runs are not treated as independent evidence.
+3. **Date-Pooled Statistics**: The Wilcoxon test averages repeated trials per `(ticker, date)` and pools across tickers/dates, avoiding pseudo-replication from identical deterministic runs.
+4. **Ticker-Scoped Probes**: Probe retrieval filters by ticker (or an explicit related ticker), eliminating cross-company keyword contamination.
+5. **Open Architecture**: Can run 100% offline with checked-in data, or scale to live APIs (Alpaca, Groq, OpenRouter) via environment variables without hardcoded credentials.
+6. **Reported Limitations**: The offline snapshot is news-only and covers `2026-06-01..2026-07-09`; `fin_mem` therefore equals `plain_rag`, and contraction-retirement/recall ablations do not change deterministic PnL. The pooled trading advantage is not statistically significant. These facts are reported rather than hidden.
 
 ---
 

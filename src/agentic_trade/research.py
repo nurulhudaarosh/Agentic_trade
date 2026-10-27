@@ -14,8 +14,9 @@ import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
 
-from .engine import ExperimentConfig, ExperimentEngine
+from .engine import ExperimentConfig, ExperimentEngine, load_all_events
 from .case_studies import build_case_cards
+from .probes import run_probe_benchmark
 
 SYSTEMS = ["no_memory", "plain_rag", "fin_mem", "ours"]
 TICKERS = ["TSLA", "NFLX", "AMZN", "MSFT", "COIN"]
@@ -34,7 +35,9 @@ def run_one(base: ExperimentConfig, ticker: str, trial: int = 0, **flags: object
 
 
 def paired_wilcoxon(results: pd.DataFrame, metric: str = "daily_return") -> dict:
-    pivot = results.pivot_table(index=["ticker", "trial", "date"], columns="system", values=metric, aggfunc="first")
+    # Average repeated trials per (ticker, date) so LLM sampling variance does not
+    # turn the same market day into multiple pseudo-independent observations.
+    pivot = results.pivot_table(index=["ticker", "date"], columns="system", values=metric, aggfunc="mean")
     if "ours" not in pivot or len(pivot) < 2:
         return {"p_value": None, "statistic": None, "significant": False}
     alternatives = [name for name in SYSTEMS if name != "ours" and name in pivot]
@@ -73,13 +76,20 @@ def plot_curves(daily: pd.DataFrame, output: Path, title: str) -> None:
     ax.grid(alpha=0.25); ax.legend(); fig.tight_layout(); fig.savefig(output, dpi=180); plt.close(fig)
 
 
-def run_matrix(base: ExperimentConfig, tickers: list[str] = TICKERS, trials: int = 3) -> dict[str, object]:
+def run_matrix(base: ExperimentConfig, tickers: list[str] = TICKERS, trials: int = 1) -> dict[str, object]:
     records: list[dict] = []
     daily_frames: list[pd.DataFrame] = []
     evidence_frames: list[pd.DataFrame] = []
+    # A deterministic backbone ignores temperature, so repeating it would create
+    # byte-identical pseudo-trials and invalidate the paired significance test.
+    deterministic = base.backbone == "deterministic"
+    effective_trials = 1 if deterministic else max(1, trials)
+    if deterministic and trials != 1:
+        print(f"Deterministic backbone: collapsing {trials} requested trials to 1.")
     for ticker in tickers:
-        for trial in range(trials):
-            metrics, daily, evidence = run_one(base, ticker, trial, temperature=0.7 + trial * 0.01)
+        for trial in range(effective_trials):
+            temperature = base.temperature if deterministic else min(1.0, base.temperature + trial * 0.05)
+            metrics, daily, evidence = run_one(base, ticker, trial, temperature=temperature)
             for system, values in metrics.items():
                 records.append({"ticker": ticker, "trial": trial, "system": system, **values})
             daily["trial"] = trial; daily_frames.append(daily)
@@ -99,6 +109,13 @@ def run_matrix(base: ExperimentConfig, tickers: list[str] = TICKERS, trials: int
     plot_curves(daily_all[daily_all["ticker"].eq("TSLA")], output / "fig5_tsla_curves.png", "TSLA cumulative return")
     plot_curves(daily_all, output / "fig6_all_tickers_curves.png", "All-ticker cumulative return")
     return {"summary": summary, "daily": daily_all, "evidence": evidence_all, "wilcoxon": significance}
+
+
+def run_probes(base: ExperimentConfig, tickers: list[str] = TICKERS) -> pd.DataFrame:
+    """Run the retrieval probe benchmark over the full ticker universe."""
+    events = load_all_events(base.data_dir, tickers)
+    frame, _ = run_probe_benchmark(events, base.output_dir / "matrix")
+    return frame
 
 
 def run_sweep(base: ExperimentConfig, name: str, values: list[object], flag: str) -> pd.DataFrame:
@@ -219,16 +236,18 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/research"))
     parser.add_argument("--ticker", default="TSLA")
     parser.add_argument("--tickers", default="TSLA,NFLX,AMZN,MSFT,COIN")
-    parser.add_argument("--trials", type=int, default=3)
+    parser.add_argument("--trials", type=int, default=1, help="LLM sampling trials (deterministic backbone always runs once)")
     parser.add_argument("--matrix", action="store_true")
     parser.add_argument("--sweeps", action="store_true")
     parser.add_argument("--risk-profiles", action="store_true")
-    parser.add_argument("--all", action="store_true", help="Run matrix, sweeps, and risk profiles")
+    parser.add_argument("--probes", action="store_true")
+    parser.add_argument("--all", action="store_true", help="Run matrix, sweeps, risk profiles, and probes")
     args = parser.parse_args()
-    base = ExperimentConfig(data_dir=args.data_dir, output_dir=args.output_dir, ticker=args.ticker, start_date=date(2026, 6, 1), train_end=date(2026, 8, 31), test_start=date(2026, 9, 1), end_date=date(2026, 10, 23))
+    base = ExperimentConfig(data_dir=args.data_dir, output_dir=args.output_dir, ticker=args.ticker, start_date=date(2026, 6, 1), train_end=date(2026, 6, 15), test_start=date(2026, 6, 16), end_date=date(2026, 7, 9))
+    tickers = [item.strip().upper() for item in args.tickers.split(",") if item.strip()]
 
     if args.matrix or args.all:
-        run_matrix(base, [item.strip().upper() for item in args.tickers.split(",") if item.strip()], args.trials)
+        run_matrix(base, tickers, args.trials)
     if args.sweeps or args.all:
         run_sweep(base, "table4_risk_modes", ["conservative", "standard", "aggressive"], "risk_mode")
         run_sweep(base, "table5_top_k", [1, 3, 5, 10], "top_k")
@@ -237,8 +256,10 @@ def main() -> None:
         summarize_ablations(base.output_dir / "sweeps", base.output_dir / "matrix")
     if args.risk_profiles or args.all:
         run_risk_profiles(base)
-    if not (args.matrix or args.sweeps or args.risk_profiles or args.all):
-        print("Choose --matrix, --sweeps, --risk-profiles, or --all")
+    if args.probes or args.all:
+        run_probes(base, tickers)
+    if not (args.matrix or args.sweeps or args.risk_profiles or args.probes or args.all):
+        print("Choose --matrix, --sweeps, --risk-profiles, --probes, or --all")
 
 
 if __name__ == "__main__":

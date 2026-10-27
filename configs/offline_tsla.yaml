@@ -3,9 +3,9 @@ data_dir: "data"
 output_dir: "artifacts/offline"
 ticker: "TSLA"
 start_date: "2026-06-01"
-train_end: "2026-08-31"
-test_start: "2026-09-01"
-end_date: "2026-10-23"
+train_end: "2026-06-15"
+test_start: "2026-06-16"
+end_date: "2026-07-09"
 top_k: 5
 trial_id: 0
 temperature: 0.7

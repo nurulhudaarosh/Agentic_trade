@@ -1,6 +1,6 @@
 from datetime import date
 
-from agentic_trade.memory import MemoryEvent, OursMemory, extract_topics
+from agentic_trade.memory import MemoryEvent, OursMemory, extract_topics, infer_source_category
 
 
 def test_future_event_is_not_retrieved_early():
@@ -27,6 +27,21 @@ def test_learned_source_reliability_is_applied_to_new_events():
     memory.learn_source_reliability("news", 0.9)
     memory.add(MemoryEvent("news", date(2026, 9, 1), "TSLA", "news", "earnings profit"))
     assert memory.events[0].source_reliability == 0.9
+
+
+def test_source_category_inference():
+    assert infer_source_category("Company announces quarterly results") == "press_release"
+    assert infer_source_category("Analyst raises price target") == "analyst_note"
+    assert infer_source_category("Tesla shares rally on demand") == "media"
+
+
+def test_relationship_bonus_only_applies_to_related_tickers():
+    memory = OursMemory()
+    memory.add(MemoryEvent("own", date(2026, 9, 1), "TSLA", "news", "earnings profit beat", related_tickers={"MSFT"}))
+    memory.add(MemoryEvent("peer", date(2026, 9, 1), "MSFT", "news", "earnings profit beat", related_tickers={"TSLA"}))
+    own = memory.retrieve(date(2026, 9, 1), {"earnings"}, top_k=1, ticker="TSLA")
+    assert own[0].ticker == "MSFT"  # peer receives the relationship bonus
+    assert memory.retrieve(date(2026, 9, 1), {"earnings"}, top_k=2, ticker="COIN") == []
 
 
 def test_previous_decision_is_recalled_after_resolution():

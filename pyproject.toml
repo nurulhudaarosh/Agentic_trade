@@ -27,6 +27,8 @@ all = ["alpaca-py>=0.30", "pytest>=8.0", "groq>=0.5", "openai>=1.0"]
 agentic-trade = "agentic_trade.cli:main"
 agentic-paper = "agentic_trade.paper_trader:main"
 agentic-research = "agentic_trade.research:main"
+agentic-dashboard = "agentic_trade.dashboard_server:main"
+agentic-live = "agentic_trade.live_trader:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

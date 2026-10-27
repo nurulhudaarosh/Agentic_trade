@@ -9,9 +9,8 @@ from pathlib import Path
 # Ensure src is importable when running script directly
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from agentic_trade.engine import ExperimentConfig, ExperimentEngine
-from agentic_trade.research import run_matrix, run_risk_profiles, run_sweep, summarize_ablations
-from agentic_trade.probes import run_probe_benchmark
+from agentic_trade.engine import ExperimentConfig
+from agentic_trade.research import run_matrix, run_probes, run_risk_profiles, run_sweep, summarize_ablations
 
 
 def main() -> None:
@@ -20,7 +19,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/research"))
     parser.add_argument("--ticker", default="TSLA")
     parser.add_argument("--tickers", default="TSLA,NFLX,AMZN,MSFT,COIN")
-    parser.add_argument("--trials", type=int, default=3)
+    parser.add_argument("--trials", type=int, default=1, help="LLM sampling trials (deterministic backbone always runs once)")
     parser.add_argument("--matrix", action="store_true", help="Run multi-ticker trials and Wilcoxon tests (Table 2)")
     parser.add_argument("--sweeps", action="store_true", help="Run parameter sweeps and component ablations (Tables 4, 5, 6)")
     parser.add_argument("--risk-profiles", action="store_true", help="Run risk mode comparison (Table 4 & Figure 8)")
@@ -33,9 +32,9 @@ def main() -> None:
         output_dir=args.output_dir,
         ticker=args.ticker,
         start_date=date(2026, 6, 1),
-        train_end=date(2026, 8, 31),
-        test_start=date(2026, 9, 1),
-        end_date=date(2026, 10, 23),
+        train_end=date(2026, 6, 15),
+        test_start=date(2026, 6, 16),
+        end_date=date(2026, 7, 9),
     )
 
     if args.matrix or args.all:
@@ -53,9 +52,7 @@ def main() -> None:
         run_risk_profiles(base)
 
     if args.probes or args.all:
-        engine = ExperimentEngine(base)
-        engine.load_data()
-        run_probe_benchmark(engine.events, base.output_dir / "matrix")
+        run_probes(base, tickers)
 
     if not (args.matrix or args.sweeps or args.risk_profiles or args.probes or args.all):
         print("Choose --matrix, --sweeps, --risk-profiles, --probes, or --all")

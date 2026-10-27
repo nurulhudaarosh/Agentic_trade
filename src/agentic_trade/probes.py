@@ -32,18 +32,6 @@ def get_default_probes() -> list[ProbeItem]:
         ProbeItem("TSLA-04", "TSLA", "Tesla relationship with SpaceX and cross-company deals", {"mergers_acquisitions", "guidance"}, ("spacex", "elon", "arms", "satellite", "ipo"), date(2026, 7, 9), "supply_chain"),
         ProbeItem("TSLA-05", "TSLA", "Tesla automotive margin beat and earnings profitability", {"earnings"}, ("profit", "margin", "eps", "revenue", "beat"), date(2026, 7, 1), "earnings_catalyst"),
 
-        # NVDA Chip & Foundry Partners
-        ProbeItem("NVDA-01", "NVDA", "Nvidia AI chip foundry fabrication by TSMC", {"guidance"}, ("tsmc", "foundry", "wafer", "packaging", "supplier"), date(2026, 7, 1), "supply_chain"),
-        ProbeItem("NVDA-02", "NVDA", "Data center revenue growth and quarterly profit surge", {"earnings"}, ("data center", "revenue", "profit", "growth", "beat"), date(2026, 7, 5), "earnings_catalyst"),
-        ProbeItem("NVDA-03", "NVDA", "Antitrust scrutiny in AI GPU hardware distribution", {"legal_risk"}, ("antitrust", "doj", "investigation", "scrutiny", "monopoly"), date(2026, 7, 5), "legal_risk"),
-        ProbeItem("NVDA-04", "NVDA", "Nvidia high bandwidth memory supplier contracts", {"supply_chain", "earnings"}, ("sk hynix", "micron", "samsung", "hbm", "memory"), date(2026, 7, 5), "supply_chain"),
-
-        # AAPL Hardware & Ecosystem
-        ProbeItem("AAPL-01", "AAPL", "Apple iPhone assembly and supply chain partners", {"guidance"}, ("foxconn", "pegatron", "assembly", "china", "india", "supplier"), date(2026, 7, 1), "supply_chain"),
-        ProbeItem("AAPL-02", "AAPL", "Quarterly iPhone sales and services revenue growth", {"earnings"}, ("services", "iphone", "revenue", "beat", "sales"), date(2026, 7, 5), "earnings_catalyst"),
-        ProbeItem("AAPL-03", "AAPL", "App Store antitrust regulations in EU and US", {"legal_risk"}, ("dma", "eu", "antitrust", "app store", "monopoly", "compliance"), date(2026, 7, 5), "legal_risk"),
-        ProbeItem("AAPL-04", "AAPL", "Share repurchase authorization and dividend raise", {"capital_return"}, ("buyback", "dividend", "repurchase", "shareholder"), date(2026, 7, 5), "capital_return"),
-
         # MSFT Cloud & OpenAI Partnerships
         ProbeItem("MSFT-01", "MSFT", "Microsoft cloud infrastructure partner for OpenAI", {"guidance"}, ("openai", "azure", "partnership", "cloud", "ai"), date(2026, 7, 1), "supply_chain"),
         ProbeItem("MSFT-02", "MSFT", "Azure cloud quarterly growth rate and guidance", {"guidance", "earnings"}, ("azure", "growth", "cloud", "guidance", "raised"), date(2026, 7, 5), "guidance"),
@@ -82,7 +70,10 @@ def evaluate_probes(
         precision_scores: list[float] = []
 
         for probe in probes:
-            retrieved = system.retrieve(as_of=probe.as_of, topics=probe.topics, top_k=top_k)
+            # A probe may only be answered from its own ticker (or an explicitly
+            # related ticker); without this filter keyword matches from unrelated
+            # companies contaminate the benchmark.
+            retrieved = system.retrieve(as_of=probe.as_of, topics=probe.topics, top_k=top_k, ticker=probe.ticker)
             ranks_of_hits = []
             for rank, event in enumerate(retrieved, 1):
                 text_combined = f"{event.text} {event.summary}".lower()
