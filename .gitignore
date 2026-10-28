@@ -5,7 +5,8 @@ __pycache__/
 *.egg-info/
 artifacts/*
 !artifacts/study/
-artifacts/study/llm/
+artifacts/study/llm/*
+!artifacts/study/llm/llm_decisions.parquet
 artifacts/study/llm_cache/
 *.png
 results/
