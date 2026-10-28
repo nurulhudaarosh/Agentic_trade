@@ -234,15 +234,29 @@ def llm_table(path: Path) -> str:
             sharpe = port.mean() / sd * 252 ** 0.5 if sd > 0 else 0.0
             cr = (1 + port).prod() - 1
             mix = "/".join(f"{100 * (g['action'] == a).mean():.0f}" for a in ("Buy", "Sell", "Hold"))
-            lines.append(f"{bb} & {sysname} & {f(cr, True)} & {f(sharpe)} & {mix} & {len(g)}" + r" \\")
+            eq = (1 + port).cumprod()
+            mdd = float((eq / eq.cummax() - 1).min())
+            lines.append(f"{bb} & {sysname} & {f(cr, True)} & {f(sharpe)} & {f(mdd, True)} & {mix} & {len(g)}" + r" \\")
+        lines.append(r"\hline")
+    from scipy.stats import wilcoxon
+
+    piv = frame.pivot_table(index=["backbone", "ticker", "date"], columns="system", values="ret")
+    tests = []
+    for other in ("FinMem", "No-Memory"):
+        res = wilcoxon(piv["Ours"], piv[other])
+        tests.append(f"Ours vs {other}: {1e4 * (piv['Ours'] - piv[other]).mean():+.1f} bps/day, Wilcoxon $p={res.pvalue:.3f}$")
+    bh = frame[(frame["backbone"] == frame["backbone"].iloc[0]) & (frame["system"] == "FinMem")].groupby("date")["next_return"].mean()
+    bh_cr = (1 + bh).prod() - 1
+    lines.append(r"\multicolumn{7}{l}{Pooled over backbones: " + "; ".join(tests) + r".} \\")
+    lines.append(r"\multicolumn{7}{l}{Buy \& Hold over the same window: CR " + f(bh_cr, True) + r"\%.} \\")
     return rf"""\begin{{table}}[ht]
 \centering
 \caption{{LLM backbones deciding from the same retrieved memory (FinMem-style prompt, temperature 0, single trial), FinMem's five stocks, last 50 test sessions.}}
 \label{{tab:llm}}
 \small
-\begin{{tabular}}{{llrrcr}}
+\begin{{tabular}}{{llrrrcr}}
 \hline
-Backbone & Memory & CR (\%) & Sharpe & Buy/Sell/Hold (\%) & Decisions \\
+Backbone & Memory & CR (\%) & Sharpe & MDD (\%) & Buy/Sell/Hold (\%) & Decisions \\
 \hline
 {chr(10).join(lines)}
 \hline

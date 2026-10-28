@@ -217,7 +217,10 @@ def run_llm_experiment(signals: pd.DataFrame, evidence: pd.DataFrame, news: pd.D
     closes = prices.pivot_table(index="date", columns="ticker", values="close").sort_index()
     logret = np.log(closes).diff()
     ev = {k: g.sort_values("rank") for k, g in evidence.groupby(["system", "ticker", "date"])}
-    sig = signals.set_index(["system", "ticker", "date"]).sort_index()
+    # Plain dict built once: pandas' lazy MultiIndex lookups are not thread-safe.
+    ours_sig = {(t, d): row for t, d, row in zip(
+        signals.loc[signals["system"] == "Ours", "ticker"], signals.loc[signals["system"] == "Ours", "date"],
+        signals.loc[signals["system"] == "Ours", ["peer_n", "peer_signal", "episodic_edge", "episodic_n"]].to_dict("records"))}
     all_days = list(closes.index)
     out_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
@@ -241,8 +244,8 @@ def run_llm_experiment(signals: pd.DataFrame, evidence: pd.DataFrame, news: pd.D
                                      "cred": float(r["cred"]),
                                      "corrob": float(r["corroboration"])})
             extras = {}
-            if system == "Ours" and (system, t, day) in sig.index:
-                s = sig.loc[(system, t, day)]
+            if system == "Ours" and (t, day) in ours_sig:
+                s = ours_sig[(t, day)]
                 if s["peer_n"] > 0:
                     extras["peer"] = f"{int(s['peer_n'])} same-day articles on co-mentioned firms, credibility-weighted sentiment {s['peer_signal']:+.2f}."
                 if pd.notna(s["episodic_edge"]):

@@ -404,22 +404,27 @@ def fig_llm(llm: pd.DataFrame, out: Path) -> None:
     llm["ret"] = llm["position"] * llm["next_return"]
     rows = []
     for (bb, sysname), g in llm.groupby(["backbone", "system"]):
-        port = g.groupby("date")["ret"].mean().sort_index()
-        m = metrics(port)
-        rows.append({"backbone": bb, "system": sysname, "sharpe": m["sharpe"], "cr": m["cumulative_return"]})
+        m = metrics(g.groupby("date")["ret"].mean().sort_index())
+        rows.append({"backbone": bb, "system": sysname, "sharpe": m["sharpe"], "cr": m["cumulative_return"],
+                     "mdd": m["max_drawdown"]})
     tab = pd.DataFrame(rows)
+    bh = metrics(llm[(llm["backbone"] == llm["backbone"].iloc[0]) & (llm["system"] == "FinMem")]
+                 .groupby("date")["next_return"].mean().sort_index())
     systems = ["No-Memory", "FinMem", "Ours"]
     colors = {"No-Memory": "#c3c2b7", "FinMem": ORANGE, "Ours": BLUE}
     bbs = sorted(tab["backbone"].unique())
-    fig, axes = plt.subplots(1, 2, figsize=(12, 3.6))
-    for ax, key, title, scale in [(axes[0], "sharpe", "Sharpe ratio", 1), (axes[1], "cr", "Cumulative return (%)", 100)]:
+    fig, axes = plt.subplots(1, 3, figsize=(14, 3.8))
+    panels = [(axes[0], "sharpe", "Sharpe ratio", 1, bh["sharpe"]), (axes[1], "cr", "Cumulative return (%)", 100, 100 * bh["cumulative_return"]),
+              (axes[2], "mdd", "Max drawdown (%)", 100, 100 * bh["max_drawdown"])]
+    for ax, key, title, scale, ref in panels:
         x = np.arange(len(bbs))
         for i, s in enumerate(systems):
             vals = [tab[(tab.backbone == b) & (tab.system == s)][key].mean() * scale for b in bbs]
             ax.bar(x + (i - 1) * 0.27, vals, width=0.25, color=colors[s], label=s)
+        ax.axhline(ref, color=INK2, linestyle="--", linewidth=1, label="Buy & Hold")
         ax.set_xticks(x, bbs); ax.axhline(0, color=INK2, linewidth=0.8); ax.set_title(title)
     axes[0].legend(fontsize=8)
-    fig.suptitle("LLM backbones: same retrieved memories, FinMem-style prompt (5 FinMem tickers)", fontweight="bold")
+    fig.suptitle("LLM backbones deciding from the same retrieved memory (FinMem's 5 stocks, last 50 sessions)", fontweight="bold")
     fig.tight_layout()
     _save(fig, out, "fig20_llm_backbones")
 
