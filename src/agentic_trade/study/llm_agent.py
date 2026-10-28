@@ -23,7 +23,11 @@ BACKBONES = {
     "gpt-oss-20b": ("groq", "openai/gpt-oss-20b"),
     "qwen3.8-27b": ("groq", "qwen/qwen3.8-27b"),
     "nemotron-3-ultra": ("openrouter", "nvidia/nemotron-3-ultra-550b-a55b:free"),
+    "xing4.0-29b": ("openrouter", "xingchen-agi/xing4.0-29b-a4b:free"),
 }
+# Concurrent decision chains per provider: Groq's free tier is token-per-minute bound (one
+# paced stream per model); OpenRouter models without the daily free cap tolerate several.
+DEFAULT_WORKERS = {"groq": 1, "openrouter": 5}
 ENDPOINTS = {"groq": "https://api.groq.com/openai/v1/chat/completions",
              "openrouter": "https://openrouter.ai/api/v1/chat/completions"}
 LAYER_NAME = {0: "short-term news", 1: "quarterly report (10-Q)", 2: "annual report (10-K)"}
@@ -34,16 +38,36 @@ SYSTEM = ("You are an expert equity trading agent. You trade a single stock dail
           "Sell = hold a short position, Hold = keep the current position unchanged.")
 
 
-def _key(provider: str) -> str | None:
+GROQ_KEY_VAR = re.compile(r"^GR(O)?OQ(_API)?_KEY\d*$")
+
+
+def _keys(provider: str) -> list[str]:
+    """All credentials for a provider. Groq keys are every env var named GROQ_KEY,
+    GROQ_API_KEY, GROOQ_KEY, GROOQ_KEY2, GROQ_KEY3, ... (one per account), de-duplicated."""
     try:
-        from dotenv import load_dotenv
+        from dotenv import dotenv_values, load_dotenv
 
         load_dotenv(Path(".env"))
+        names = list(dotenv_values(Path(".env")))
     except ImportError:
-        pass
+        names = []
     if provider == "groq":
-        return os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY") or os.getenv("GROOQ_KEY")
-    return os.getenv("OPENROUTER_API_KEY") or os.getenv("OPEN_ROUTER_KEY") or os.getenv("OPEN_ROUTER_kEY")
+        names = sorted({n for n in list(os.environ) + names if GROQ_KEY_VAR.match(n)},
+                       key=lambda n: (re.sub(r"\d+$", "", n), int(re.search(r"(\d*)$", n).group(1) or 0)))
+        values = [os.getenv(n) for n in names]
+    else:
+        values = [os.getenv("OPENROUTER_API_KEY") or os.getenv("OPEN_ROUTER_KEY") or os.getenv("OPEN_ROUTER_kEY")]
+    seen, out = set(), []
+    for v in values:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _key(provider: str) -> str | None:
+    keys = _keys(provider)
+    return keys[0] if keys else None
 
 
 @dataclass
@@ -54,10 +78,31 @@ class Backbone:
 
     def __post_init__(self) -> None:
         self.provider, self.model = BACKBONES[self.label]
-        self.key = _key(self.provider)
-        self.calls = self.cache_hits = self.failures = 0
-        self.min_interval = 11.0 if self.provider == "groq" else 4.0
-        self._last = 0.0
+        self.keys = _keys(self.provider)
+        self.key = self.keys[0] if self.keys else None
+        self.calls = self.cache_hits = self.failures = self.rate_limited = 0
+        # Per-key pacing: each account has its own per-minute and per-day token budget.
+        self.min_interval = 11.0 if self.provider == "groq" else 1.0
+        self._last = {k: 0.0 for k in self.keys}
+        self._blocked_until = {k: 0.0 for k in self.keys}
+        self._pace = threading.Lock()
+
+    def _acquire_key(self) -> str:
+        """Wait for the account that can be used soonest (not rate-limited, pacing respected)."""
+        while True:
+            with self._pace:
+                now = time.time()
+                ready = {k: max(self._blocked_until[k], self._last[k] + self.min_interval) for k in self.keys}
+                key = min(ready, key=ready.get)
+                if ready[key] <= now:
+                    self._last[key] = now
+                    return key
+                delay = ready[key] - now
+            time.sleep(min(delay, 30.0))
+
+    def _block(self, key: str, seconds: float) -> None:
+        with self._pace:
+            self._blocked_until[key] = max(self._blocked_until[key], time.time() + seconds)
 
     def _payload(self, prompt: str) -> dict:
         body = {"model": self.model, "temperature": self.temperature, "max_tokens": 1200,
@@ -75,22 +120,25 @@ class Backbone:
             self.cache_hits += 1
             return json.loads(path.read_text())
         path.parent.mkdir(parents=True, exist_ok=True)
-        headers = {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"}
-        for attempt in range(8):
-            wait = self.min_interval - (time.time() - self._last)
-            if wait > 0:
-                time.sleep(wait)
-            self._last = time.time()
+        errors = 0
+        # Rate limits (429) are waited out without limit: a quota pause must never turn into
+        # a recorded "Hold". Only transport/server errors count towards giving up.
+        while errors < 8:
+            key = self._acquire_key()
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
             try:
                 resp = requests.post(ENDPOINTS[self.provider], headers=headers, json=self._payload(prompt), timeout=90)
             except requests.RequestException:
+                errors += 1
                 time.sleep(10)
                 continue
             if resp.status_code == 429:
                 retry = resp.headers.get("retry-after")
-                time.sleep(min(float(retry) if retry and retry.replace(".", "").isdigit() else 30.0, 300) + 1)
+                self.rate_limited += 1
+                self._block(key, min(float(retry) if retry and retry.replace(".", "").isdigit() else 30.0, 3600) + 1)
                 continue
             if resp.status_code >= 500 or resp.status_code == 408:
+                errors += 1
                 time.sleep(10)
                 continue
             if resp.status_code != 200:
@@ -157,65 +205,75 @@ def build_prompt(system: str, ticker: str, day: str, momentum: float, cum3: floa
 
 def run_llm_experiment(signals: pd.DataFrame, evidence: pd.DataFrame, news: pd.DataFrame, filings: pd.DataFrame,
                        prices: pd.DataFrame, tickers: list[str], dates: list, backbones: list[str],
-                       out_dir: Path, systems: tuple[str, ...] = ("No-Memory", "FinMem", "Ours")) -> pd.DataFrame:
+                       out_dir: Path, systems: tuple[str, ...] = ("No-Memory", "FinMem", "Ours"),
+                       workers: dict[str, int] | None = None, out_name: str = "llm_decisions.parquet") -> pd.DataFrame:
+    """Each (backbone, ticker, system) is an independent decision chain (its position and
+    recent P&L feed the next prompt), so chains run concurrently; calls to one backbone are
+    paced by that backbone's shared rate limiter."""
+    from concurrent.futures import ThreadPoolExecutor
+
     text = {str(i): h for i, h in zip(news["id"], news["headline"])}
     text.update({str(i): t for i, t in zip(filings["id"], filings["text"])})
     closes = prices.pivot_table(index="date", columns="ticker", values="close").sort_index()
     logret = np.log(closes).diff()
     ev = {k: g.sort_values("rank") for k, g in evidence.groupby(["system", "ticker", "date"])}
-    sig = signals.set_index(["system", "ticker", "date"])
+    sig = signals.set_index(["system", "ticker", "date"]).sort_index()
     all_days = list(closes.index)
     out_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
     lock = threading.Lock()
+    clients = {label: Backbone(label) for label in backbones}
 
-    def worker(label: str) -> None:
-        bb = Backbone(label)
-        for t in tickers:
-            for system in systems:
-                position, hist = 0.0, []
-                for day in dates:
-                    i = all_days.index(day)
-                    momentum = float(logret[t].iloc[i - 2: i + 1].sum())
-                    cum3 = float(sum(hist[-3:]))
-                    mem_sys = "FinMem" if system == "No-Memory" else system
-                    rows = ev.get((mem_sys, t, day))
-                    memories = []
-                    if rows is not None and system != "No-Memory":
-                        for _, r in rows.iterrows():
-                            memories.append({"id": r["item_id"], "layer": int(r["layer"]), "text": text.get(str(r["item_id"]), "")[:220],
-                                             "date": str(pd.Timestamp.fromordinal(pd.Timestamp(day).toordinal() - int(r["age_days"])).date()),
-                                             "cred": float(r["cred"]),
-                                             "corrob": float(r["corroboration"])})
-                    extras = {}
-                    if system == "Ours" and (system, t, day) in sig.index:
-                        s = sig.loc[(system, t, day)]
-                        if s["peer_n"] > 0:
-                            extras["peer"] = f"{int(s['peer_n'])} same-day articles on co-mentioned firms, credibility-weighted sentiment {s['peer_signal']:+.2f}."
-                        if pd.notna(s["episodic_edge"]):
-                            verdict = "news signals in such situations were followed by adverse moves - be cautious" if s["episodic_edge"] < 0 else "news signals in such situations were reliable"
-                            extras["episodic"] = f"in {int(s['episodic_n'])} similar past situations the signed market-adjusted return was {s['episodic_edge']:+.2%}; {verdict}."
-                    prompt = build_prompt(system, t, str(day), momentum, cum3, position, memories, extras)
-                    decision = bb.ask(prompt)
-                    action = decision["action"]
-                    position = 1.0 if action == "Buy" else -1.0 if action == "Sell" else position
-                    nxt = all_days[i + 1]
-                    r = float(closes.at[nxt, t] / closes.at[day, t] - 1)
-                    hist.append(position * r)
-                    with lock:
-                        results.append({"backbone": label, "system": system, "ticker": t, "date": day, "action": action,
-                                        "position": position, "next_return": r, "status": decision["status"],
-                                        "confidence": decision.get("confidence"), "reasoning": decision.get("reasoning", ""),
-                                        "n_memories": len(memories)})
-                print(f"[llm] {label} {t} {system} done (calls={bb.calls}, cache={bb.cache_hits}, fail={bb.failures})", flush=True)
-                with lock:
-                    pd.DataFrame(results).to_parquet(out_dir / "llm_decisions.parquet", index=False)
+    def chain(label: str, t: str, system: str) -> None:
+        bb = clients[label]
+        position, hist, rows_out = 0.0, [], []
+        for day in dates:
+            i = all_days.index(day)
+            momentum = float(logret[t].iloc[i - 2: i + 1].sum())
+            cum3 = float(sum(hist[-3:]))
+            mem_sys = "FinMem" if system == "No-Memory" else system
+            rows = ev.get((mem_sys, t, day))
+            memories = []
+            if rows is not None and system != "No-Memory":
+                for _, r in rows.iterrows():
+                    memories.append({"id": r["item_id"], "layer": int(r["layer"]), "text": text.get(str(r["item_id"]), "")[:220],
+                                     "date": str(pd.Timestamp.fromordinal(pd.Timestamp(day).toordinal() - int(r["age_days"])).date()),
+                                     "cred": float(r["cred"]),
+                                     "corrob": float(r["corroboration"])})
+            extras = {}
+            if system == "Ours" and (system, t, day) in sig.index:
+                s = sig.loc[(system, t, day)]
+                if s["peer_n"] > 0:
+                    extras["peer"] = f"{int(s['peer_n'])} same-day articles on co-mentioned firms, credibility-weighted sentiment {s['peer_signal']:+.2f}."
+                if pd.notna(s["episodic_edge"]):
+                    verdict = "news signals in such situations were followed by adverse moves - be cautious" if s["episodic_edge"] < 0 else "news signals in such situations were reliable"
+                    extras["episodic"] = f"in {int(s['episodic_n'])} similar past situations the signed market-adjusted return was {s['episodic_edge']:+.2%}; {verdict}."
+            prompt = build_prompt(system, t, str(day), momentum, cum3, position, memories, extras)
+            decision = bb.ask(prompt)
+            action = decision["action"]
+            position = 1.0 if action == "Buy" else -1.0 if action == "Sell" else position
+            nxt = all_days[i + 1]
+            r = float(closes.at[nxt, t] / closes.at[day, t] - 1)
+            hist.append(position * r)
+            rows_out.append({"backbone": label, "system": system, "ticker": t, "date": day, "action": action,
+                             "position": position, "next_return": r, "status": decision["status"],
+                             "confidence": decision.get("confidence"), "reasoning": decision.get("reasoning", ""),
+                             "n_memories": len(memories)})
+        with lock:
+            results.extend(rows_out)
+            pd.DataFrame(results).to_parquet(out_dir / out_name, index=False)
+        print(f"[llm] {label} {t} {system} done (calls={bb.calls}, cache={bb.cache_hits}, fail={bb.failures}, "
+              f"rate_limited={bb.rate_limited})", flush=True)
 
-    threads = [threading.Thread(target=worker, args=(b,)) for b in backbones]
-    for th in threads:
-        th.start()
-    for th in threads:
-        th.join()
+    workers = workers or {}
+    pools = []
+    for label in backbones:
+        n = workers.get(label, DEFAULT_WORKERS[clients[label].provider] * max(1, len(clients[label].keys)))
+        pool = ThreadPoolExecutor(max_workers=n, thread_name_prefix=label)
+        pools.append([pool.submit(chain, label, t, system) for t in tickers for system in systems])
+    for futures in pools:
+        for fut in futures:
+            fut.result()
     frame = pd.DataFrame(results)
-    frame.to_parquet(out_dir / "llm_decisions.parquet", index=False)
+    frame.to_parquet(out_dir / out_name, index=False)
     return frame
