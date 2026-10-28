@@ -4,31 +4,39 @@ Reproducible research framework for evaluating time-ordered trading memory archi
 
 ---
 
-## 1. Base Paper (FinMem) vs. Our Novel Architecture
+## 1. One-year study: faithful FinMem vs. our memory (`src/agentic_trade/study/`)
 
-### Evaluated Memory Systems:
-- `no_memory`: Price-momentum baseline with zero retrieved text events.
-- `plain_rag`: Flat recency-ranked vector memory (Generative Agents baseline).
-- `fin_mem`: 3-layer human cognitive memory (Shallow News: 14d decay, Intermediate 10-Q: 90d decay, Deep 10-K: 365d decay).
-- `ours`: **Our enhanced architecture** extending FinMem with four critical capabilities:
+| | |
+|---|---|
+| Universe | FinMem's TSLA, NFLX, AMZN, MSFT, COIN + NVDA, AAPL, GOOGL, META, AMD |
+| Data | 23,247 Alpaca/Benzinga articles (Sep 2025 – Oct 2026), 93 SEC 10-Q/10-K XBRL filings, SIP daily bars + SPY/QQQ |
+| Point-in-time | items visible at the first 16:00 ET close after publication; decide at close t, earn close t → t+1; 5 bps costs |
+| Encoders | FinBERT polarity + MiniLM embeddings, shared by every system |
+| Protocols | **rolling walk-forward** (Dec 2025 – Oct 2026, 227 sessions, monthly threshold re-selection) and fixed split (test May – Oct 2026) |
 
-| Novelty | FinMem (Base Paper) | Ours (Agentic Trade) | Advantage |
-| :--- | :--- | :--- | :--- |
-| **Source Provenance** | Unweighted (all sources equal within layer) | **Learned Reliability**: $r_s \in [0.5, 1.0]$ optimized from training price hit-rates | Prioritizes credible sources over rumor noise |
-| **Fact Reconciliation** | Pure time decay; obsolete facts remain active | **Active Contradiction Retirement**: Same-layer topic overlap + opposite sentiment retires old facts | Deactivates superseded guidance immediately |
-| **Decision Memory** | Unindexed general text reflection | **Episodic Outcome Recall**: $t+1$ resolved returns recalled for similar future topics | Agent learns directly from its own trading history |
-| **Corporate Graph** | Single-ticker isolation | **Multi-Ticker Graph Memory**: `related_tickers` indexed with relationship relevance bonus | Captures supply-chain and competitor spillover |
-| **Retrieval Metric** | Downstream PnL only | **Pre-Registered Probe Benchmark (Table 7)** | Quantifies retrieval fidelity: **2.5x Hit@1, 1.7x precision** on the checked-in 17-query suite |
+Memory systems: `plain_rag` (flat vector memory), **faithful `fin_mem`** (Q = 14/90/365,
+importance v·α^δ with FinMem's layer probabilities, purge rules, access-counter promotion,
+top-K per layer) and **`ours`** = FinMem + N1 hierarchical online source credibility,
+N2 duplicate consolidation, N3 semantic contradiction retirement, N4 situational query,
+N5 data-driven importance, N6 point-in-time co-mention peer graph, N7 outcome-aware
+episodic recall/abstention. Baselines also include B&H, momentum/mean-reversion rules,
+LogReg/LightGBM on price features (± memory features) and four free LLM backbones.
 
-### What the checked-in offline data actually supports
+Headline (rolling protocol, `artifacts/study/rolling/`): Ours Sharpe −0.20 vs FinMem −0.72
+and Plain RAG −0.65; on FinMem's five stocks Ours +3.5% vs FinMem −28.6%. The gain over
+FinMem is **not statistically significant** (Wilcoxon p = 0.39), next-day IC of every
+news-memory signal is ≈ 0, and Buy & Hold / price-only LightGBM are stronger in this period.
+Full notes: [`paper/RESEARCH_LOG.md`](paper/RESEARCH_LOG.md).
 
-- Events span `2026-06-01..2026-07-09`; the default split trains through `2026-06-15` and evaluates `2026-06-16..2026-07-09`, so test-time news ingestion is exercised.
-- The snapshot has **news only** (no 10-Q/10-K), so the intermediate/deep layers are dormant and `fin_mem` collapses to the flat `plain_rag` baseline.
-- Publisher attribution is sparse, so provenance falls back to source genre (`media`, `analyst_note`, `press_release`) when `source_name` is unavailable.
-- `related_tickers` is supplied by [`data/relationships.csv`](data/relationships.csv); this activates cross-ticker retrieval.
-- Deterministic runs are **single-trial**; temperature is only meaningful for LLM backbones. The paired Wilcoxon test aggregates by `(ticker, date)` to avoid pseudo-replication.
-- On the TSLA baseline, `ours` returns `+0.47%` vs `-6.00%` for `plain_rag`/`fin_mem`, but the pooled five-ticker comparison is **not statistically significant** (`p=0.50`) and `ours` is worse on NFLX and MSFT. See [`artifacts/research/matrix/table2.md`](artifacts/research/matrix/table2.md).
-- Component ablations: provenance changes returns; contradiction retirement changes `facts_retired` but not PnL in this sample; outcome recall only affects LLM prompts (the deterministic policy ignores it); topic matching is neutral in this run. See Table 6.
+```bash
+python scripts/build_dataset.py          # download news, bars, SEC filings (needs ALPACA_KEY/SECRET)
+python scripts/run_study.py --fresh      # annotate, replay all memory systems, both protocols, tables
+python -c "import sys; sys.path.insert(0,'src'); from pathlib import Path; from agentic_trade.study.figures import render_all; render_all(Path('data/study'), Path('artifacts/study'), Path('paper/figures'))"
+python scripts/run_llm_study.py --days 50 # LLM backbones (Groq / OpenRouter free tiers)
+```
+
+The earlier 5-week prototype (`engine.py`, `memory.py`, `research.py`) is kept for the
+legacy CLI and tests; its numbers are superseded by the study above.
 
 ---
 
@@ -66,12 +74,12 @@ python scripts/run_dashboard.py --port 8050
 agentic-dashboard --port 8050
 ```
 
-Open your browser at **`http://localhost:8050`** to access:
-- **Interactive Multi-Line Equity Curves**: Real-time crosshair tooltips comparing `Ours` vs `FinMem` vs `Plain RAG` vs `Buy & Hold`.
-- **Memory & Provenance Inspector**: Audit retrieved headlines, learned source reliability ($r_s$), active vs retired facts (contradiction reconciliation), and episodic outcome recall.
-- **Scientific Benchmark Suite**: Tables 2, 4, 6, 7 and Wilcoxon signed-rank significance ($p < 0.05$).
-- **Alpaca Paper Trading Station**: Reconciled positions, dry-run order logs, and portfolio rebalances.
-- **Live Experiment Runner**: Run offline TSLA backtests and paper rebalances directly from the UI.
+Open your browser at **`http://localhost:8050`** (deep links: `/#agent`, `/#scanner`, `/#research`) to access:
+- **Memory Agent**: the research memory agent (Ours) live per ticker — retrieved memories by layer with credibility, corroboration and age, peer and episodic evidence, FinMem/Plain-RAG comparison, a memory+price-model consensus, an LLM decision with cited memories, and one-click paper execution. "Refresh market data" pulls new news/bars/filings, annotates them and replays memory.
+- **Scanner**: all ten stocks with memory signal, FinMem action, price-model P(up) and consensus; execute consensus on paper.
+- **Research Lab**: study results for both protocols and both universes — interactive equity curves, all-strategy table, significance tests, per-ticker heatmap, IC, LLM backbones, memory operations, learned credibility and the paper figure gallery.
+- **Trading Terminal / AI Agent Harness / Portfolio**: charting, manual orders with server-side risk limits, and the auto-agent loop — which now runs the research memory agent (LLM with consensus fallback).
+- **Alpaca Paper Trading Station**: Reconciled positions, order logs, and portfolio rebalances.
 
 ---
 

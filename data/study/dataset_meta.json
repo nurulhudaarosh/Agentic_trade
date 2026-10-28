@@ -1,0 +1,22 @@
+{
+  "tickers": [
+    "TSLA",
+    "NFLX",
+    "AMZN",
+    "MSFT",
+    "COIN",
+    "NVDA",
+    "AAPL",
+    "GOOGL",
+    "META",
+    "AMD"
+  ],
+  "benchmarks": [
+    "SPY",
+    "QQQ"
+  ],
+  "news_start": "2025-09-01",
+  "filings_start": "2024-07-01",
+  "end": "2026-10-27",
+  "built_at": "2026-10-28T18:32:36.135741+00:00"
+}

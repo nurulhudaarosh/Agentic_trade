@@ -1,0 +1,838 @@
+{
+  "Plain RAG": {
+    "retired": 0,
+    "merged": 0,
+    "promoted": 0,
+    "purged": 0,
+    "items": 36177
+  },
+  "FinMem": {
+    "retired": 0,
+    "merged": 0,
+    "promoted": 1221,
+    "purged": 32625,
+    "items": 36177
+  },
+  "Ours": {
+    "retired": 667,
+    "merged": 2260,
+    "promoted": 1510,
+    "purged": 29417,
+    "items": 33917
+  },
+  "Ours (signed N1)": {
+    "retired": 675,
+    "merged": 2252,
+    "promoted": 1427,
+    "purged": 29501,
+    "items": 33925
+  },
+  "w/o credibility (N1)": {
+    "retired": 650,
+    "merged": 2261,
+    "promoted": 1662,
+    "purged": 29293,
+    "items": 33916
+  },
+  "w/o dedup (N2)": {
+    "retired": 719,
+    "merged": 0,
+    "promoted": 1405,
+    "purged": 31566,
+    "items": 36177
+  },
+  "w/o contradiction (N3)": {
+    "retired": 0,
+    "merged": 2281,
+    "promoted": 1525,
+    "purged": 30005,
+    "items": 33896
+  },
+  "w/o situational query (N4)": {
+    "retired": 668,
+    "merged": 2256,
+    "promoted": 1501,
+    "purged": 29422,
+    "items": 33921
+  },
+  "w/o data importance (N5)": {
+    "retired": 686,
+    "merged": 2236,
+    "promoted": 1063,
+    "purged": 30080,
+    "items": 33941
+  },
+  "w/o peer graph (N6)": {
+    "retired": 667,
+    "merged": 2260,
+    "promoted": 1510,
+    "purged": 29417,
+    "items": 33917
+  },
+  "w/o episodic recall (N7)": {
+    "retired": 667,
+    "merged": 2260,
+    "promoted": 1510,
+    "purged": 29417,
+    "items": 33917
+  },
+  "FinMem K=1": {
+    "retired": 0,
+    "merged": 0,
+    "promoted": 1056,
+    "purged": 33291,
+    "items": 36177
+  },
+  "Ours K=1": {
+    "retired": 716,
+    "merged": 2245,
+    "promoted": 925,
+    "purged": 30271,
+    "items": 33932
+  },
+  "FinMem K=3": {
+    "retired": 0,
+    "merged": 0,
+    "promoted": 1221,
+    "purged": 32625,
+    "items": 36177
+  },
+  "Ours K=3": {
+    "retired": 667,
+    "merged": 2260,
+    "promoted": 1510,
+    "purged": 29417,
+    "items": 33917
+  },
+  "FinMem K=10": {
+    "retired": 0,
+    "merged": 0,
+    "promoted": 1221,
+    "purged": 32625,
+    "items": 36177
+  },
+  "Ours K=10": {
+    "retired": 667,
+    "merged": 2260,
+    "promoted": 1510,
+    "purged": 29417,
+    "items": 33917
+  },
+  "_credibility": {
+    "Ours": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "Ours (signed N1)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "w/o dedup (N2)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "w/o contradiction (N3)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "w/o situational query (N4)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "w/o data importance (N5)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "w/o peer graph (N6)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "w/o episodic recall (N7)": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "Ours K=1": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "Ours K=3": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ],
+    "Ours K=10": [
+      {
+        "level": "g",
+        "name": "global",
+        "n": 19240.0,
+        "hit_rate": 0.4997920997920998,
+        "posterior": 0.4997921862011638
+      },
+      {
+        "level": "c",
+        "name": "other",
+        "n": 10805.0,
+        "hit_rate": 0.5108745950948634,
+        "posterior": 0.5108665495237215
+      },
+      {
+        "level": "c",
+        "name": "legal",
+        "n": 580.0,
+        "hit_rate": 0.4844827586206897,
+        "posterior": 0.4846938775510204
+      },
+      {
+        "level": "c",
+        "name": "market_wrap",
+        "n": 997.0,
+        "hit_rate": 0.5025075225677031,
+        "posterior": 0.5024875621890548
+      },
+      {
+        "level": "c",
+        "name": "corporate",
+        "n": 2770.0,
+        "hit_rate": 0.496028880866426,
+        "posterior": 0.49604031677465804
+      },
+      {
+        "level": "c",
+        "name": "insider",
+        "n": 344.0,
+        "hit_rate": 0.5203488372093024,
+        "posterior": 0.5198863636363636
+      },
+      {
+        "level": "c",
+        "name": "earnings",
+        "n": 1850.0,
+        "hit_rate": 0.4827027027027027,
+        "posterior": 0.48277717976318624
+      },
+      {
+        "level": "c",
+        "name": "analyst",
+        "n": 1814.0,
+        "hit_rate": 0.4498346196251378,
+        "posterior": 0.4500548847420417
+      },
+      {
+        "level": "c",
+        "name": "options",
+        "n": 80.0,
+        "hit_rate": 0.65,
+        "posterior": 0.6363636363636364
+      }
+    ]
+  }
+}

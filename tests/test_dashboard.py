@@ -6,6 +6,7 @@ from agentic_trade.dashboard_server import (
     get_benchmarks_data,
     get_equity_data,
     get_evidence_data,
+    get_available_tickers,
     get_market_data,
     get_orders_data,
     get_summary_data,
@@ -19,6 +20,8 @@ def test_dashboard_summary_returns_expected_structure():
     assert "tickers" in summary
     assert len(summary["tickers"]) > 0
     assert "latest_prices" in summary
+    assert summary["tickers"] == get_available_tickers()
+    assert set(summary["tickers"]).issubset(summary["latest_prices"])
 
 
 def test_dashboard_equity_offline():
@@ -101,3 +104,27 @@ def test_portfolio_manager_lifecycle(tmp_path: Path):
     res_set = mgr.update_settings({"risk_profile": "conservative"})
     assert res_set["success"] is True
     assert mgr.settings["risk_profile"] == "conservative"
+
+
+def test_portfolio_manager_blocks_buy_above_position_limit(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("agentic_trade.dashboard_server.get_latest_prices", lambda: {"TSLA": 100.0})
+    mgr = PortfolioManager(tmp_path / "portfolio.json")
+    mgr.reset(initial_capital=1000.0)
+    result = mgr.execute_order("TSLA", "Buy", shares=3_000)
+    assert result["success"] is False
+    assert result["risk_limit"] == "max_position_pct"
+    assert mgr.cash == 1000.0
+    assert not mgr.positions
+
+
+def test_portfolio_manager_allows_exit_after_loss_limit(tmp_path: Path, monkeypatch):
+    prices = {"TSLA": 100.0}
+    monkeypatch.setattr("agentic_trade.dashboard_server.get_latest_prices", lambda: prices)
+    mgr = PortfolioManager(tmp_path / "portfolio.json")
+    mgr.reset(initial_capital=1000.0)
+    assert mgr.execute_order("TSLA", "Buy", shares=2)["success"] is True
+    prices["TSLA"] = 50.0
+    mgr.settings["max_daily_loss_pct"] = 0.01
+    result = mgr.execute_order("TSLA", "Sell", shares=2)
+    assert result["success"] is True
+    assert "TSLA" not in mgr.positions

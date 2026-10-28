@@ -155,6 +155,20 @@
     .kpi-val { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; }
     .kpi-sub { font-size: 0.75rem; color: var(--text-dim); }
 
+    /* Live execution tape and quick trading tools */
+    .terminal-tools { display: grid; grid-template-columns: 1.35fr 1fr; gap: 1rem; }
+    .live-tape { display: flex; flex-direction: column; gap: 0.45rem; max-height: 232px; overflow-y: auto; }
+    .live-tape-row { display: grid; grid-template-columns: 74px 52px 1fr auto; align-items: center; gap: 0.55rem; padding: 0.55rem 0.65rem; background: #080c14; border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; font-size: 0.76rem; }
+    .live-tape-row.latest { border-color: rgba(6,182,212,0.55); box-shadow: 0 0 14px rgba(6,182,212,0.12); }
+    .live-tape-time { color: var(--text-dim); font-size: 0.68rem; }
+    .live-tape-symbol { font-weight: 800; color: #fff; }
+    .live-tape-meta { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+    .tool-button { min-height: 58px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0.15rem; text-align: left; }
+    .tool-button small { color: rgba(255,255,255,0.7); font-size: 0.68rem; font-weight: 500; }
+    .tape-empty { color: var(--text-dim); text-align: center; padding: 1.25rem 0.5rem; font-size: 0.78rem; }
+    @media (max-width: 760px) { .terminal-tools { grid-template-columns: 1fr; } .live-tape-row { grid-template-columns: 62px 48px 1fr auto; } }
+
     /* Two-column Trading Layout */
     .terminal-layout { display: grid; grid-template-columns: 2.2fr 1fr; gap: 1.25rem; }
     @media (max-width: 1080px) { .terminal-layout { grid-template-columns: 1fr; } }
@@ -217,6 +231,14 @@
     .badge-buy { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
     .badge-sell { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
     .badge-hold { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-profit { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-weight: 800; }
+    .badge-loss { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-weight: 800; }
+    .pnl-pill {
+      display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.65rem;
+      border-radius: 6px; font-weight: 800; font-size: 0.8rem;
+    }
+    .pnl-pill.profit { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
+    .pnl-pill.loss { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
 
     /* AI Reasoning Box */
     .ai-decision-card {
@@ -239,6 +261,7 @@
     }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
+  <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
@@ -254,7 +277,7 @@
       </div>
       <div class="engine-status-pill">
         <span class="pulse-dot"></span>
-        <span>AI DUAL-ENGINE: GROQ + OPENROUTER ACTIVE</span>
+        <span id="execution-mode-pill">ALPACA PAPER EXECUTION</span>
       </div>
     </div>
 
@@ -262,9 +285,9 @@
       <button class="tab-btn active" onclick="switchTab('terminal')">📊 Trading Terminal</button>
       <button class="tab-btn" onclick="switchTab('agentic')">🤖 AI Agent Harness</button>
       <button class="tab-btn" onclick="switchTab('portfolio')">💼 Positions & Portfolio</button>
-      <button class="tab-btn" onclick="switchTab('performance')">📈 Research Performance</button>
-      <button class="tab-btn" onclick="switchTab('memory')">🧠 Memory Inspector</button>
-      <button class="tab-btn" onclick="switchTab('benchmarks')">🔬 Research Benchmarks</button>
+      <button class="tab-btn" onclick="switchTab('agent')">🧠 Memory Agent</button>
+      <button class="tab-btn" onclick="switchTab('scanner')">🛰️ Scanner</button>
+      <button class="tab-btn" onclick="switchTab('research')">🔬 Research Lab</button>
       <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
     </nav>
   </header>
@@ -314,6 +337,54 @@
         </div>
       </div>
 
+      <!-- Live execution tape and creative quick tools -->
+      <div class="terminal-tools">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📡 Live Trade Tape</div>
+              <div class="card-subtitle">Manual + AI executions, refreshed every 5 seconds</div>
+            </div>
+            <span class="engine-status-pill" style="font-size: 0.68rem; padding: 0.2rem 0.55rem;"><span class="pulse-dot"></span> STREAMING</span>
+          </div>
+          <div id="live-trade-tape" class="live-tape" aria-live="polite">
+            <div class="tape-empty">Waiting for the first filled order...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🧪 Trade Lab</div>
+              <div class="card-subtitle">Fast sizing for <span class="tk-label">TSLA</span></div>
+            </div>
+            <span id="trade-lab-quote" style="font-weight: 800; color: var(--cyan);">$0.00</span>
+          </div>
+          <div class="tool-grid">
+            <button class="btn btn-success tool-button" onclick="quickTrade('Buy', 0.10)">⚡ Buy 10% cash<small>Risk-sized entry</small></button>
+            <button class="btn btn-danger tool-button" onclick="quickTrade('Sell', 0.25)">↘ Sell 25% held<small>Trim the position</small></button>
+            <button class="btn btn-secondary tool-button" onclick="sizeOrderByRisk()">🎯 1% risk size<small>Uses stop-loss setting</small></button>
+            <button class="btn btn-secondary tool-button" onclick="flattenSelectedTicker()">⏹ Flatten ticker<small>Close selected position</small></button>
+          </div>
+          <div id="trade-lab-status" style="font-size: 0.75rem; color: var(--text-muted);">Ready for a paper trade.</div>
+        </div>
+      </div>
+
+      <div class="card" style="border-color: rgba(245, 158, 11, 0.35);">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🛡️ Risk Cockpit</div>
+            <div class="card-subtitle">Server-enforced paper account limits</div>
+          </div>
+          <span id="risk-day-label" style="font-size: 0.72rem; color: var(--text-dim);">--</span>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="signal-item"><span class="signal-item-name">Daily PnL</span><span class="signal-item-val" id="risk-daily-pnl">$0.00</span><span class="signal-item-desc" id="risk-daily-pnl-limit">Limit: $0.00</span></div>
+          <div class="signal-item"><span class="signal-item-name">Largest Position</span><span class="signal-item-val" id="risk-largest-position">0.00%</span><span class="signal-item-desc" id="risk-position-limit">Limit: 25.00%</span></div>
+          <div class="signal-item"><span class="signal-item-name">Trading Guard</span><span class="signal-item-val" id="risk-guard-status">ARMED</span><span class="signal-item-desc">Exits remain available</span></div>
+        </div>
+      </div>
+
       <!-- Main Terminal Layout -->
       <div class="terminal-layout">
 
@@ -324,7 +395,7 @@
               <div class="card-title">
                 <span id="chart-title-ticker">TSLA</span> • Technical Analysis & Indicator Overlay
               </div>
-              <div class="card-subtitle">SMA (20, 50) • Bollinger Bands (20, 2) • RSI (14) • MACD (12, 26, 9)</div>
+              <div class="card-subtitle">SMA (20, 50) • Bollinger Bands (20, 2) • RSI (14) • MACD (12, 26, 9) • <span id="market-data-status">Waiting for quote...</span></div>
             </div>
 
             <div class="chart-legend">
@@ -428,6 +499,58 @@
             </div>
           </div>
 
+          <!-- Active Position & PnL Banner for Selected Ticker -->
+          <div class="card" id="card-active-pos" style="border-color: rgba(59, 130, 246, 0.4); background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), var(--card-bg));">
+            <div class="card-header">
+              <div class="card-title">💼 Active Position: <span id="pos-banner-ticker">TSLA</span></div>
+              <span class="badge" id="pos-banner-status">FLAT (NO POSITION)</span>
+            </div>
+
+            <!-- When User Holds a Position -->
+            <div id="pos-banner-details" style="display: none; flex-direction: column; gap: 0.75rem;">
+              <div style="background: #080c14; padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Unrealized Profit / Loss</div>
+                  <div style="font-size: 1.45rem; font-weight: 800;" id="pos-banner-pnl">+$0.00 (+0.00%)</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Market Value</div>
+                  <div style="font-size: 1.15rem; font-weight: 700; color: #fff;" id="pos-banner-val">$0.00</div>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
+                <div class="signal-item">
+                  <span class="signal-item-name">Shares Held</span>
+                  <span class="signal-item-val" id="pos-banner-shares">0</span>
+                </div>
+                <div class="signal-item">
+                  <span class="signal-item-name">Avg Buy Price</span>
+                  <span class="signal-item-val" id="pos-banner-avg">$0.00</span>
+                </div>
+                <div class="signal-item">
+                  <span class="signal-item-name">Invested Cost</span>
+                  <span class="signal-item-val" id="pos-banner-cost">$0.00</span>
+                </div>
+              </div>
+
+              <!-- Manual Sell & Take Profit Buttons -->
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-danger" id="btn-quick-sell-all" style="flex: 1.3; justify-content: center; font-size: 0.82rem; padding: 0.65rem;" onclick="closeCurrentTicker(1.0)">
+                  💰 Sell 100% (Market Exit)
+                </button>
+                <button class="btn btn-secondary" id="btn-quick-sell-half" style="flex: 0.8; justify-content: center; font-size: 0.82rem; padding: 0.65rem;" onclick="closeCurrentTicker(0.5)">
+                  Sell 50%
+                </button>
+              </div>
+            </div>
+
+            <!-- When User Holds No Position -->
+            <div id="pos-banner-empty" style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 0.6rem;">
+              You hold no active shares in <span class="tk-label" style="font-weight: 700; color: #fff;">TSLA</span>. Use the Order Ticket below to Buy.
+            </div>
+          </div>
+
           <!-- Manual Order Ticket -->
           <div class="card">
             <div class="card-header">
@@ -454,6 +577,11 @@
                   <div class="control-label" style="margin-bottom: 0.25rem;">Shares</div>
                   <input type="number" id="order-shares" value="10" min="0.01" step="1" style="width: 100%;" oninput="onSharesChange()">
                 </div>
+              </div>
+
+              <div id="held-shares-notice" style="display: none; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--cyan); background: rgba(6, 182, 212, 0.1); padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid rgba(6, 182, 212, 0.25);">
+                <span>Holding: <strong id="held-qty-val">0</strong> shares</span>
+                <button type="button" class="btn btn-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="autofillHeldShares()">Sell Held Shares</button>
               </div>
 
               <!-- Quick Capital Presets -->
@@ -572,12 +700,13 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
                 <th>Ticker</th>
                 <th>Side</th>
                 <th>Shares</th>
-                <th>Avg Entry Price</th>
-                <th>Mark Price</th>
-                <th>Current Value</th>
-                <th>Unrealized PnL ($)</th>
+                <th>Avg Buy Price</th>
+                <th>Current Mark Price</th>
+                <th>Invested Cost</th>
+                <th>Market Value</th>
+                <th>Profit / Loss ($)</th>
                 <th>PnL (%)</th>
-                <th>Actions</th>
+                <th>Manual Sell / Take Profit</th>
               </tr>
             </thead>
             <tbody>
@@ -621,204 +750,156 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
     </div>
 
     <!-- ========================================== -->
-    <!-- TAB 4: RESEARCH PERFORMANCE & CURVES -->
+    <!-- MEMORY AGENT (research memory, live)        -->
     <!-- ========================================== -->
-    <div id="tab-performance" class="tab-content">
+    <div id="tab-agent" class="tab-content">
       <div class="toolbar">
         <div class="toolbar-group">
-          <span class="control-label">Data Mode:</span>
-          <select id="dataset-select" onchange="onDatasetChange()">
-            <option value="llm_eval">TSLA Live LLM Backtest (Groq + OpenRouter)</option>
-            <option value="offline">TSLA Baseline (Offline Deterministic)</option>
-            <option value="matrix">Research Matrix (5 Tickers, Multi-Trial)</option>
-          </select>
-
-          <div id="matrix-controls" style="display: none;" class="toolbar-group">
-            <span class="control-label">Ticker:</span>
-            <select id="ticker-select" onchange="fetchEquityData()">
-              <option value="TSLA">TSLA (Tesla)</option>
-              <option value="NFLX">NFLX (Netflix)</option>
-              <option value="AMZN">AMZN (Amazon)</option>
-              <option value="MSFT">MSFT (Microsoft)</option>
-              <option value="COIN">COIN (Coinbase)</option>
-            </select>
-
-            <span class="control-label">Trial:</span>
-            <select id="trial-select" onchange="fetchEquityData()">
-              <option value="0">Trial 0</option>
-              <option value="1">Trial 1</option>
-              <option value="2">Trial 2</option>
-            </select>
-          </div>
+          <span class="control-label">Ticker</span>
+          <select id="ag-ticker" onchange="ResearchApp.loadAgent()"></select>
+          <span class="control-label">LLM backbone</span>
+          <select id="ag-backbone"></select>
+          <button class="btn btn-ai" id="ag-ask" onclick="ResearchApp.askLLM()">🧠 Ask LLM agent</button>
+          <button class="btn btn-success" id="ag-run" onclick="ResearchApp.runAgent()">⚡ Run agent → paper trade</button>
         </div>
-
         <div class="toolbar-group">
-          <button class="btn btn-secondary" onclick="fetchEquityData()">🔄 Refresh</button>
+          <span class="ra-muted" id="ag-status">loading…</span>
+          <button class="btn btn-secondary" id="ag-refresh" onclick="ResearchApp.refreshData()">⟳ Refresh market data</button>
         </div>
       </div>
+      <div class="ra-job" id="ag-job" hidden></div>
 
-      <!-- Research KPI Ribbon -->
-      <div class="kpi-grid">
-        <div class="kpi-card green">
-          <span class="kpi-title">Cumulative Return (Ours)</span>
-          <span class="kpi-val" id="kpi-cum-return">--%</span>
-          <span class="kpi-sub" id="kpi-cum-sub">vs FinMem: --%</span>
-        </div>
-        <div class="kpi-card purple">
-          <span class="kpi-title">Sharpe Ratio</span>
-          <span class="kpi-val" id="kpi-sharpe">--</span>
-          <span class="kpi-sub">Annualized (rf=0)</span>
-        </div>
-        <div class="kpi-card orange">
-          <span class="kpi-title">Max Drawdown</span>
-          <span class="kpi-val" id="kpi-drawdown">--%</span>
-          <span class="kpi-sub">Peak-to-trough</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Facts Retired</span>
-          <span class="kpi-val" id="kpi-facts-retired">--</span>
-          <span class="kpi-sub">Consensus reconciliation</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Decisions Recalled</span>
-          <span class="kpi-val" id="kpi-decisions-recalled">--</span>
-          <span class="kpi-sub">Learned outcome recall</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Hold Rate</span>
-          <span class="kpi-val" id="kpi-hold-rate">--%</span>
-          <span class="kpi-sub">Trade conviction</span>
-        </div>
-      </div>
+      <div class="kpi-grid" id="ag-kpis"></div>
 
-      <!-- Equity Chart Card -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Comparative Portfolio Equity Curves</div>
-            <div class="card-subtitle">Ours (Cognitive Architecture) vs FinMem vs Plain RAG vs No Memory vs Buy & Hold</div>
+      <div class="ra-grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Working memory retrieved by our agent</div>
+              <div class="card-subtitle">Top-K per layer · credibility (N1) · corroboration (N2) · contradiction-filtered (N3) · situational query (N4)</div>
+            </div>
           </div>
-          <div class="chart-legend">
-            <label class="legend-item"><input type="checkbox" id="chk-ours" checked onchange="renderChart()"> <span class="legend-color" style="background: var(--purple);"></span> Ours</label>
-            <label class="legend-item"><input type="checkbox" id="chk-finmem" checked onchange="renderChart()"> <span class="legend-color" style="background: var(--orange);"></span> FinMem</label>
-            <label class="legend-item"><input type="checkbox" id="chk-plainrag" checked onchange="renderChart()"> <span class="legend-color" style="background: var(--accent);"></span> Plain RAG</label>
-            <label class="legend-item"><input type="checkbox" id="chk-nomem" checked onchange="renderChart()"> <span class="legend-color" style="background: var(--text-dim);"></span> No Memory</label>
-            <label class="legend-item"><input type="checkbox" id="chk-bnh" checked onchange="renderChart()"> <span class="legend-color" style="background: var(--green);"></span> Buy & Hold</label>
+          <div id="ag-memories" class="ra-memories"></div>
+        </div>
+        <div class="ra-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Recommendation</div><span id="ag-consensus-badge"></span></div>
+            <ul id="ag-reasons" class="ra-reasons"></ul>
+            <div id="ag-llm" class="ra-llm" hidden></div>
           </div>
-        </div>
-
-        <div class="chart-container" id="chart-wrap" onmousemove="onChartMouseMove(event)" onmouseleave="onChartMouseLeave()">
-          <svg class="terminal-chart" id="svg-chart"></svg>
-        </div>
-      </div>
-
-      <!-- Systems Table -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">System Metrics Comparison Table</div>
-        </div>
-        <div class="table-container">
-          <table id="systems-table">
-            <thead>
-              <tr>
-                <th>System Architecture</th>
-                <th>Cum Return</th>
-                <th>Sharpe Ratio</th>
-                <th>Volatility</th>
-                <th>Max DD</th>
-                <th>Hold Rate</th>
-                <th>Facts Retired</th>
-                <th>Decisions Recalled</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Memory architectures on this day</div>
+                <div class="card-subtitle">Same data, same encoder — only the memory differs. Threshold = rolling selection on the trailing 42 days.</div>
+              </div>
+            </div>
+            <div class="table-container"><table class="ra-table" id="ag-systems"></table></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Price and memory signal, last 90 sessions</div></div>
+            <div id="ag-history"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- ========================================== -->
-    <!-- TAB 5: MEMORY INSPECTOR -->
+    <!-- SCANNER                                     -->
     <!-- ========================================== -->
-    <div id="tab-memory" class="tab-content">
+    <div id="tab-scanner" class="tab-content">
       <div class="toolbar">
         <div class="toolbar-group">
-          <span class="control-label">Search:</span>
-          <input type="text" id="mem-search" placeholder="Filter by text, topic..." oninput="debounceFetchEvidence()">
-          <span class="control-label">Layer:</span>
-          <select id="mem-layer" onchange="fetchEvidence()">
-            <option value="">All Layers</option>
-            <option value="working">Working Memory</option>
-            <option value="episodic">Episodic Memory</option>
-            <option value="semantic">Semantic / Long-Term</option>
-            <option value="reflective">Reflective Memory</option>
-          </select>
-          <span class="control-label">Filter:</span>
-          <select id="mem-cited" onchange="fetchEvidence()">
-            <option value="">All Citations</option>
-            <option value="true">Cited Only</option>
-            <option value="false">Uncited</option>
-          </select>
+          <span class="card-title">Ten-stock agent scanner</span>
+          <span class="ra-muted" id="sc-date"></span>
         </div>
         <div class="toolbar-group">
-          <button class="btn btn-secondary" onclick="fetchEvidence()">🔄 Refresh</button>
+          <button class="btn btn-secondary" onclick="ResearchApp.loadScanner()">⟳ Rescan</button>
+          <button class="btn btn-success" onclick="ResearchApp.executeAll()">Execute consensus on paper (all)</button>
         </div>
       </div>
-
       <div class="card">
-        <div class="table-container">
-          <table id="evidence-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Ticker</th>
-                <th>Layer</th>
-                <th>Memory ID</th>
-                <th>Topic</th>
-                <th>Cited</th>
-                <th>Active</th>
-                <th>Evidence Text</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div class="card-subtitle">Consensus = our memory agent and the price-only LightGBM must not disagree; episodic abstention forces Hold. Click a row to open the Memory Agent.</div>
+        <div class="table-container"><table class="ra-table ra-clickable" id="sc-table"></table></div>
       </div>
     </div>
 
     <!-- ========================================== -->
-    <!-- TAB 6: RESEARCH BENCHMARKS (TABLES 2-7) -->
+    <!-- RESEARCH LAB                                -->
     <!-- ========================================== -->
-    <div id="tab-benchmarks" class="tab-content">
+    <div id="tab-research" class="tab-content">
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <span class="control-label">Protocol</span>
+          <div class="ra-seg" id="rl-protocol">
+            <button data-v="rolling" class="active">Rolling walk-forward</button>
+            <button data-v="fixed">Fixed split</button>
+          </div>
+          <span class="control-label">Universe</span>
+          <div class="ra-seg" id="rl-scope">
+            <button data-v="all" class="active">10 stocks</button>
+            <button data-v="finmem5">FinMem's 5</button>
+          </div>
+        </div>
+        <span class="ra-muted" id="rl-range"></span>
+      </div>
+      <div class="kpi-grid" id="rl-kpis"></div>
       <div class="card">
         <div class="card-header">
-          <div class="card-title">🔬 Table 2: Benchmark Performance Matrix across 5 Tickers</div>
+          <div><div class="card-title">Equity curves (equal-weight, net of 5 bps)</div>
+          <div class="card-subtitle">Click a legend entry to show or hide a strategy.</div></div>
         </div>
-        <div class="table-container">
-          <table id="table2">
-            <thead>
-              <tr><th>System</th><th>Cumulative Return</th><th>Sharpe Ratio</th><th>Max Drawdown</th><th>Hold Rate</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+        <div id="rl-legend" class="ra-legend"></div>
+        <div id="rl-equity" class="ra-chart"></div>
+      </div>
+      <div class="ra-grid-2">
+        <div class="card">
+          <div class="card-header"><div class="card-title">All strategies (test period)</div></div>
+          <div class="table-container"><table class="ra-table" id="rl-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Ours vs. each baseline</div>
+          <div class="card-subtitle">Wilcoxon on pooled (ticker, date) returns, Holm-adjusted; ΔSharpe with 95% block-bootstrap CI</div></div></div>
+          <div class="table-container"><table class="ra-table" id="rl-tests"></table></div>
         </div>
       </div>
-
       <div class="card">
-        <div class="card-header">
-          <div class="card-title">🔬 Table 7: Multi-Hop Memory Retrieval Probes</div>
+        <div class="card-header"><div class="card-title">Per-ticker Sharpe ratio</div></div>
+        <div class="table-container" id="rl-heatmap"></div>
+      </div>
+      <div class="ra-grid-2">
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Predictive content of the memory signal</div>
+          <div class="card-subtitle">Spearman IC vs. next-day market-adjusted return</div></div></div>
+          <div id="rl-ic"></div>
         </div>
-        <div class="table-container">
-          <table id="table7">
-            <thead>
-              <tr><th>Probe Scenario</th><th>Ours Precision</th><th>FinMem Precision</th><th>Plain RAG</th><th>Delta Edge</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">LLM backbones (FinMem tickers, last 50 sessions)</div>
+          <div class="card-subtitle">Same retrieved memory, FinMem-style prompt, temperature 0</div></div></div>
+          <div class="table-container"><table class="ra-table" id="rl-llm"></table></div>
         </div>
       </div>
+      <div class="ra-grid-2">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Memory operations over the whole run</div></div>
+          <div class="table-container"><table class="ra-table" id="rl-ops"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">Learned source credibility (N1)</div>
+          <div class="card-subtitle">Posterior hit-rate of each headline category (market-adjusted, online)</div></div></div>
+          <div id="rl-cred"></div>
+        </div>
+      </div>
+      <div class="card ra-findings">
+        <div class="card-title">What the evidence says</div>
+        <ul id="rl-findings"></ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Paper figures</div><span class="card-subtitle">paper/figures · click to enlarge</span></div>
+        <div id="rl-figures" class="ra-figures"></div>
+      </div>
+      <div id="ra-lightbox" class="ra-lightbox" hidden onclick="this.hidden=true"><img alt=""></div>
     </div>
-
     <!-- ========================================== -->
     <!-- TAB 7: HARNESS SETTINGS -->
     <!-- ========================================== -->
@@ -884,7 +965,7 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
 
     let marketData = null;
     let portfolioData = null;
-    let equityData = null;
+    let watchlistTickers = ['TSLA', 'AMZN', 'MSFT', 'NFLX', 'COIN'];
     let latestPrices = { TSLA: 372.22, AMZN: 248.0, MSFT: 524.51, NFLX: 65.85, COIN: 164.45 };
 
     const COLORS = {
@@ -900,6 +981,8 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
       fetchSummary();
       loadMarketData();
       fetchPortfolio();
+      setInterval(fetchPortfolio, 5000);
+      setInterval(loadMarketData, 5000);
     });
 
     function showToast(msg, isErr = false) {
@@ -915,22 +998,26 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
-      event.currentTarget.classList.add('active');
+      const btn = (typeof event !== 'undefined' && event && event.currentTarget && event.currentTarget.classList)
+        ? event.currentTarget
+        : document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
+      if (btn) btn.classList.add('active');
       document.getElementById('tab-' + tabId).classList.add('active');
 
       if (tabId === 'terminal') { loadMarketData(); fetchPortfolio(); }
       else if (tabId === 'portfolio') fetchPortfolio();
-      else if (tabId === 'performance') fetchEquityData();
-      else if (tabId === 'memory') fetchEvidence();
-      else if (tabId === 'benchmarks') fetchBenchmarks();
+      else if (tabId === 'agent') ResearchApp.loadAgent();
+      else if (tabId === 'scanner') ResearchApp.loadScanner();
+      else if (tabId === 'research') ResearchApp.loadResearch();
     }
 
     async function fetchSummary() {
       try {
         const res = await fetch('/api/summary');
         const data = await res.json();
+        watchlistTickers = [...new Set([...(data.tickers || []), ...Object.keys(data.latest_prices || {})])].sort();
         if (data.latest_prices) latestPrices = data.latest_prices;
-        renderTickerBar(data.tickers || ['TSLA', 'AMZN', 'MSFT', 'NFLX', 'COIN']);
+        renderTickerBar(watchlistTickers);
       } catch (err) {
         console.error("Summary error", err);
       }
@@ -984,8 +1071,16 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
         marketData = await resM.json();
         const tech = await resT.json();
 
+        latestPrices[currentTicker] = marketData.latest_price;
+        if (!watchlistTickers.includes(currentTicker)) watchlistTickers.push(currentTicker);
+        renderTickerBar(watchlistTickers);
+        const source = marketData.price_source === 'alpaca_paper_live' ? 'LIVE PAPER QUOTE' : 'HISTORICAL CSV FALLBACK';
+        const sourceEl = document.getElementById('market-data-status');
+        if (sourceEl) sourceEl.textContent = `${source} • ${marketData.as_of || 'unknown time'}`;
+
         updateTerminalKPIs(tech);
         drawTerminalChart();
+        renderSelectedPosition();
       } catch (err) {
         console.error("Failed to load market data", err);
       }
@@ -1236,6 +1331,50 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
       onSharesChange();
     }
 
+    function setTradeLabStatus(message, isError = false) {
+      const el = document.getElementById('trade-lab-status');
+      el.textContent = message;
+      el.style.color = isError ? 'var(--red)' : 'var(--text-muted)';
+    }
+
+    function quickTrade(action, fraction) {
+      setOrderAction(action);
+      if (action === 'Buy') {
+        setCapitalPreset(fraction);
+      } else {
+        const held = (portfolioData?.positions || []).find(p => p.ticker === currentTicker);
+        const shares = held ? Math.max(0.01, Math.floor(held.shares * fraction * 100) / 100) : 0;
+        document.getElementById('order-shares').value = shares || 1;
+        onSharesChange();
+      }
+      setTradeLabStatus(`${action} ticket prepared for ${currentTicker}. Review and submit below.`);
+      document.getElementById('btn-submit-order').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function sizeOrderByRisk() {
+      const price = latestPrices[currentTicker] || 100;
+      const stopLossPct = Number(portfolioData?.settings?.stop_loss_pct || 5) / 100;
+      const equity = Number(portfolioData?.equity || 100000);
+      const riskBudget = equity * 0.01;
+      const shares = Math.max(1, Math.floor(riskBudget / Math.max(price * stopLossPct, 0.01)));
+      setOrderAction('Buy');
+      document.getElementById('order-shares').value = shares;
+      onSharesChange();
+      setTradeLabStatus(`1% risk size: ${shares} shares, based on a ${Number(stopLossPct * 100).toFixed(1)}% stop.`);
+      document.getElementById('btn-submit-order').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    async function flattenSelectedTicker() {
+      const held = (portfolioData?.positions || []).find(p => p.ticker === currentTicker);
+      if (!held) {
+        setTradeLabStatus(`No open ${currentTicker} position to flatten.`, true);
+        return;
+      }
+      if (!confirm(`Close ${held.shares} shares of ${currentTicker}?`)) return;
+      await closePosition(currentTicker);
+      setTradeLabStatus(`${currentTicker} flatten request submitted.`);
+    }
+
     async function submitManualOrder() {
       const shares = parseFloat(document.getElementById('order-shares').value);
       const orderType = document.getElementById('order-type').value;
@@ -1257,7 +1396,7 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
           showToast(`✅ ${currentOrderAction} ${shares} shares of ${currentTicker} Filled!`);
           fetchPortfolio();
         } else {
-          showToast(`❌ Order Failed: ${data.error}`, true);
+          showToast(`🛡️ Order blocked: ${data.error}`, true);
         }
       } catch (err) {
         showToast(`❌ Network error submitting order`, true);
@@ -1372,6 +1511,13 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
         document.getElementById('term-kpi-equity-sub').textContent = `Cash: $${portfolioData.cash.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
         document.getElementById('term-kpi-positions').textContent = portfolioData.positions.length;
         document.getElementById('term-kpi-unrealized').textContent = `Unrealized: ${portfolioData.unrealized_pnl >= 0 ? '+' : ''}$${portfolioData.unrealized_pnl.toFixed(2)}`;
+        const modePill = document.getElementById('execution-mode-pill');
+        if (modePill) modePill.textContent = portfolioData.execution_mode === 'alpaca_paper' ? 'ALPACA PAPER EXECUTION' : 'LOCAL PAPER SIMULATION';
+        renderLiveTradeTape();
+        renderSelectedPosition();
+        renderRiskCockpit();
+        const labQuote = document.getElementById('trade-lab-quote');
+        if (labQuote) labQuote.textContent = `$${(latestPrices[currentTicker] || 0).toFixed(2)}`;
 
         // Portfolio Tab KPIs
         document.getElementById('port-equity').textContent = `$${portfolioData.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
@@ -1387,27 +1533,104 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
       }
     }
 
+    function renderRiskCockpit() {
+      const risk = portfolioData?.risk;
+      if (!risk) return;
+      const pnl = document.getElementById('risk-daily-pnl');
+      const guard = document.getElementById('risk-guard-status');
+      pnl.textContent = `${risk.daily_pnl >= 0 ? '+' : ''}$${risk.daily_pnl.toFixed(2)}`;
+      pnl.style.color = risk.daily_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      document.getElementById('risk-daily-pnl-limit').textContent = `Limit: -$${risk.daily_loss_limit.toFixed(2)}`;
+      document.getElementById('risk-largest-position').textContent = `${risk.largest_position_pct.toFixed(2)}%`;
+      document.getElementById('risk-position-limit').textContent = `Limit: ${risk.max_position_pct.toFixed(2)}%`;
+      const guardTriggered = risk.daily_pnl < -risk.daily_loss_limit;
+      guard.textContent = guardTriggered ? 'BUY PAUSED' : 'ARMED';
+      guard.style.color = guardTriggered ? 'var(--red)' : 'var(--green)';
+      document.getElementById('risk-day-label').textContent = `UTC day: ${risk.daily_start_date}`;
+    }
+
+    function renderSelectedPosition() {
+      const position = [
+        ...(portfolioData?.positions || []),
+        ...(portfolioData?.alpaca_positions || [])
+      ].find(p => p.ticker === currentTicker);
+      document.getElementById('pos-banner-ticker').textContent = currentTicker;
+      document.querySelectorAll('.tk-label').forEach(el => { el.textContent = currentTicker; });
+      const details = document.getElementById('pos-banner-details');
+      const empty = document.getElementById('pos-banner-empty');
+      if (!position) {
+        details.style.display = 'none';
+        empty.style.display = 'block';
+        document.getElementById('pos-banner-status').textContent = 'FLAT (NO POSITION)';
+        return;
+      }
+
+      details.style.display = 'flex';
+      empty.style.display = 'none';
+      document.getElementById('pos-banner-status').textContent = `${position.side.toUpperCase()} • LIVE MARK $${position.current_price.toFixed(2)}`;
+      const pnlColor = position.unrealized_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const pnlSign = position.unrealized_pnl >= 0 ? '+' : '';
+      const pnl = document.getElementById('pos-banner-pnl');
+      pnl.textContent = `${pnlSign}$${position.unrealized_pnl.toFixed(2)} (${pnlSign}${position.unrealized_pnl_pct.toFixed(2)}%)`;
+      pnl.style.color = pnlColor;
+      document.getElementById('pos-banner-val').textContent = `$${position.current_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      document.getElementById('pos-banner-shares').textContent = position.shares;
+      document.getElementById('pos-banner-avg').textContent = `$${position.avg_price.toFixed(2)}`;
+      document.getElementById('pos-banner-cost').textContent = `$${position.invested_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    }
+
+    function renderLiveTradeTape() {
+      const tape = document.getElementById('live-trade-tape');
+      if (!tape) return;
+      const orders = (portfolioData?.recent_orders || []).filter(order => order.status === 'filled' || order.action || order.decision).slice(0, 12);
+      if (!orders.length) {
+        tape.innerHTML = '<div class="tape-empty">Waiting for the first filled order...</div>';
+        return;
+      }
+      tape.innerHTML = orders.map((order, index) => {
+        const action = order.action || order.decision || 'Hold';
+        const source = order.is_ai ? `AI / ${order.provider || 'agent'}` : 'Manual';
+        const time = order.timestamp ? new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--';
+        const color = action.toLowerCase() === 'buy' ? 'var(--green)' : action.toLowerCase() === 'sell' ? 'var(--red)' : 'var(--yellow)';
+        return `<div class="live-tape-row ${index === 0 ? 'latest' : ''}">
+          <span class="live-tape-time">${escapeHtml(time)}</span>
+          <span class="live-tape-symbol">${escapeHtml(order.ticker)}</span>
+          <span class="live-tape-meta"><strong style="color: ${color};">${escapeHtml(action)}</strong> · ${escapeHtml(source)} · ${escapeHtml(order.status || 'recorded')}</span>
+          <span style="font-weight: 700; color: #fff;">${order.shares ? escapeHtml(order.shares) : '--'} sh</span>
+        </div>`;
+      }).join('');
+    }
+
     function renderPositionsTable() {
       const tbody = document.querySelector('#positions-table tbody');
       tbody.innerHTML = '';
-      if (!portfolioData || !portfolioData.positions || portfolioData.positions.length === 0) {
+      const positions = portfolioData?.execution_mode === 'alpaca_paper'
+        ? (portfolioData?.positions || [])
+        : [...(portfolioData?.positions || []), ...(portfolioData?.alpaca_positions || [])];
+      if (!positions.length) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No open positions in portfolio.</td></tr>';
         return;
       }
 
-      portfolioData.positions.forEach(p => {
+      positions.forEach(p => {
         const tr = document.createElement('tr');
         const pnlCol = p.unrealized_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+        const source = p.broker_position ? 'Alpaca paper' : 'Dashboard paper';
+        const action = `<button class="btn btn-danger" style="padding: 0.2rem 0.6rem; font-size: 0.72rem;" onclick="closePosition('${p.ticker}')">Close</button>`;
         tr.innerHTML = `
           <td style="font-weight: 700;">${p.ticker}</td>
-          <td><span class="badge badge-${p.side.toLowerCase()}">${p.side}</span></td>
+          <td><span class="badge badge-${p.side.toLowerCase()}">${p.side}</span><div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.2rem;">${source}</div></td>
           <td>${p.shares}</td>
           <td>$${p.avg_price.toFixed(2)}</td>
           <td>$${p.current_price.toFixed(2)}</td>
           <td>$${p.current_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
           <td style="color: ${pnlCol}; font-weight: 700;">${p.unrealized_pnl >= 0 ? '+' : ''}$${p.unrealized_pnl.toFixed(2)}</td>
           <td style="color: ${pnlCol};">${p.unrealized_pnl_pct >= 0 ? '+' : ''}${p.unrealized_pnl_pct.toFixed(2)}%</td>
-          <td><button class="btn btn-danger" style="padding: 0.2rem 0.6rem; font-size: 0.72rem;" onclick="closePosition('${p.ticker}')">Close</button></td>
+          <td>${action}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1441,6 +1664,7 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
     }
 
     async function closePosition(tk) {
+      if (!confirm(`Close the entire Alpaca Paper position in ${tk}?`)) return;
       try {
         const res = await fetch('/api/close_position', {
           method: 'POST',
@@ -1449,8 +1673,10 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
         });
         const data = await res.json();
         if (data.success) {
-          showToast(`Position in ${tk} closed.`);
+          showToast(`Alpaca Paper position in ${tk} close order submitted.`);
           fetchPortfolio();
+        } else {
+          showToast(`Close failed: ${data.error || 'Unknown Alpaca error'}`, true);
         }
       } catch (err) {
         showToast('Failed to close position', true);
@@ -1501,225 +1727,10 @@ Strategy: AGGRESSIVE. Ready to dispatch trades.
       showToast('Settings Saved Successfully.');
     }
 
-    /* Research Performance Curves Tab */
-    function onDatasetChange() {
-      const mode = document.getElementById('dataset-select').value;
-      document.getElementById('matrix-controls').style.display = mode === 'matrix' ? 'flex' : 'none';
-      fetchEquityData();
-    }
-
-    async function fetchEquityData() {
-      const dataset = document.getElementById('dataset-select').value;
-      const ticker = document.getElementById('ticker-select').value;
-      const trial = document.getElementById('trial-select').value;
-
-      try {
-        const res = await fetch(`/api/equity?dataset=${dataset}&ticker=${ticker}&trial=${trial}`);
-        equityData = await res.json();
-        updateResearchKPIs();
-        renderChart();
-        updateSystemsTable();
-      } catch (err) {
-        console.error("Failed to load equity data", err);
-      }
-    }
-
-    function updateResearchKPIs() {
-      if (!equityData || !equityData.metrics) return;
-      const ours = equityData.metrics.ours || {};
-      const finmem = equityData.metrics.fin_mem || {};
-
-      const ret = ours.cumulative_return != null ? (ours.cumulative_return * 100).toFixed(2) + '%' : '--%';
-      const sharpe = ours.sharpe_ratio != null ? ours.sharpe_ratio.toFixed(2) : '--';
-      const dd = ours.max_drawdown != null ? (ours.max_drawdown * 100).toFixed(2) + '%' : '--%';
-      const retired = ours.facts_retired != null ? ours.facts_retired : '0';
-      const recalled = ours.decisions_recalled != null ? ours.decisions_recalled : '0';
-      const hold = ours.hold_rate != null ? (ours.hold_rate * 100).toFixed(1) + '%' : '--%';
-
-      const elRet = document.getElementById('kpi-cum-return');
-      elRet.textContent = ret;
-      elRet.style.color = (ours.cumulative_return || 0) >= 0 ? 'var(--green)' : 'var(--red)';
-
-      const finRet = finmem.cumulative_return != null ? (finmem.cumulative_return * 100).toFixed(2) + '%' : '--%';
-      document.getElementById('kpi-cum-sub').textContent = `vs FinMem: ${finRet}`;
-      document.getElementById('kpi-sharpe').textContent = sharpe;
-      document.getElementById('kpi-drawdown').textContent = dd;
-      document.getElementById('kpi-facts-retired').textContent = retired;
-      document.getElementById('kpi-decisions-recalled').textContent = recalled;
-      document.getElementById('kpi-hold-rate').textContent = hold;
-    }
-
-    function updateSystemsTable() {
-      const tbody = document.querySelector('#systems-table tbody');
-      tbody.innerHTML = '';
-      if (!equityData || !equityData.metrics) return;
-
-      const order = ['ours', 'fin_mem', 'plain_rag', 'no_memory', 'buy_and_hold'];
-      const names = {
-        ours: 'Ours (Learned Reliability + Reconciliation + Recall)',
-        fin_mem: 'FinMem (3-Layer Human Memory Baseline)',
-        plain_rag: 'Plain RAG (Flat Vector Generative Agents)',
-        no_memory: 'No Memory (Price Momentum Baseline)',
-        buy_and_hold: 'Buy & Hold Benchmark'
-      };
-
-      order.forEach(s => {
-        const m = equityData.metrics[s] || {};
-        const tr = document.createElement('tr');
-        const ret = m.cumulative_return != null ? (m.cumulative_return * 100).toFixed(2) + '%' : '--';
-        const sharpe = m.sharpe_ratio != null ? m.sharpe_ratio.toFixed(2) : '--';
-        const vol = m.annualized_volatility != null ? (m.annualized_volatility * 100).toFixed(2) + '%' : '--';
-        const dd = m.max_drawdown != null ? (m.max_drawdown * 100).toFixed(2) + '%' : '--';
-        const hold = m.hold_rate != null ? (m.hold_rate * 100).toFixed(1) + '%' : '--';
-        const retCol = (m.cumulative_return || 0) >= 0 ? 'var(--green)' : 'var(--red)';
-
-        tr.innerHTML = `
-          <td style="font-weight: 600;"><span style="color: ${COLORS[s]};">●</span> ${names[s]}</td>
-          <td style="color: ${retCol}; font-weight: 700;">${ret}</td>
-          <td>${sharpe}</td>
-          <td>${vol}</td>
-          <td style="color: var(--red);">${dd}</td>
-          <td>${hold}</td>
-          <td>${m.facts_retired ?? '--'}</td>
-          <td>${m.decisions_recalled ?? '--'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function renderChart() {
-      if (!equityData || !equityData.series) return;
-      const svg = document.getElementById('svg-chart');
-      const wrap = document.getElementById('chart-wrap');
-      const W = wrap.getBoundingClientRect().width || 800;
-      const H = 380;
-      const pad = { top: 25, right: 30, bottom: 45, left: 65 };
-
-      const activeKeys = [];
-      if (document.getElementById('chk-ours').checked) activeKeys.push('ours');
-      if (document.getElementById('chk-finmem').checked) activeKeys.push('fin_mem');
-      if (document.getElementById('chk-plainrag').checked) activeKeys.push('plain_rag');
-      if (document.getElementById('chk-nomem').checked) activeKeys.push('no_memory');
-      if (document.getElementById('chk-bnh').checked) activeKeys.push('buy_and_hold');
-
-      let minVal = -0.05, maxVal = 0.05;
-      activeKeys.forEach(k => {
-        (equityData.series[k] || []).forEach(pt => {
-          if (pt.return < minVal) minVal = pt.return;
-          if (pt.return > maxVal) maxVal = pt.return;
-        });
-      });
-      minVal -= 0.02; maxVal += 0.02;
-
-      const dates = equityData.dates || [];
-      const numPts = dates.length;
-      const getX = idx => pad.left + (idx / Math.max(1, numPts - 1)) * (W - pad.left - pad.right);
-      const getY = val => pad.top + (1 - (val - minVal) / (maxVal - minVal)) * (H - pad.top - pad.bottom);
-
-      let html = '';
-      for (let i = 0; i <= 6; i++) {
-        const val = minVal + (i / 6) * (maxVal - minVal);
-        const y = getY(val);
-        html += `<line x1="${pad.left}" y1="${y}" x2="${W - pad.right}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />`;
-        html += `<text x="${pad.left - 10}" y="${y + 4}" fill="#64748b" font-size="11" text-anchor="end">${(val * 100).toFixed(1)}%</text>`;
-      }
-
-      // Zero return line
-      const zeroY = getY(0);
-      html += `<line x1="${pad.left}" y1="${zeroY}" x2="${W - pad.right}" y2="${zeroY}" stroke="rgba(255,255,255,0.18)" />`;
-
-      // Paths
-      activeKeys.forEach(k => {
-        const pts = equityData.series[k] || [];
-        if (pts.length === 0) return;
-        let d = '';
-        pts.forEach((pt, idx) => {
-          d += `${idx === 0 ? 'M' : 'L'} ${getX(idx)} ${getY(pt.return)} `;
-        });
-        html += `<path d="${d}" fill="none" stroke="${COLORS[k]}" stroke-width="${k === 'ours' ? 3 : 1.8}" />`;
-      });
-
-      svg.innerHTML = html;
-    }
-
-    function onChartMouseMove(evt) {}
-    function onChartMouseLeave() {}
-
-    /* Memory Evidence & Benchmarks Tabs */
-    let searchDebounceTimer = null;
-    function debounceFetchEvidence() {
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(fetchEvidence, 300);
-    }
-
-    async function fetchEvidence() {
-      const search = document.getElementById('mem-search').value;
-      const layer = document.getElementById('mem-layer').value;
-      const cited = document.getElementById('mem-cited').value;
-
-      try {
-        const res = await fetch(`/api/evidence?dataset=offline&search=${encodeURIComponent(search)}&layer=${layer}&cited=${cited}&limit=50`);
-        const data = await res.json();
-        const tbody = document.querySelector('#evidence-table tbody');
-        tbody.innerHTML = '';
-        (data.items || []).forEach(row => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${row.date}</td>
-            <td style="font-weight: 700;">${row.ticker}</td>
-            <td><span class="badge">${row.layer}</span></td>
-            <td>${row.memory_id}</td>
-            <td style="color: var(--cyan);">${row.topic || '--'}</td>
-            <td>${row.cited ? '✅' : '—'}</td>
-            <td>${row.active ? '🟢' : '⚪'}</td>
-            <td style="max-width: 400px;">${row.text}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      } catch (err) {}
-    }
-
-    async function fetchBenchmarks() {
-      try {
-        const res = await fetch('/api/benchmarks');
-        const data = await res.json();
-
-        // Table 2
-        const t2Body = document.querySelector('#table2 tbody');
-        t2Body.innerHTML = '';
-        (data.table2 || []).forEach(r => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td style="font-weight: 700;">${r.system}</td>
-            <td style="color: ${(r.cumulative_return || 0) >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: 700;">${((r.cumulative_return || 0) * 100).toFixed(2)}%</td>
-            <td>${(r.sharpe_ratio || 0).toFixed(2)}</td>
-            <td style="color: var(--red);">${((r.max_drawdown || 0) * 100).toFixed(2)}%</td>
-            <td>${((r.hold_rate || 0) * 100).toFixed(1)}%</td>
-          `;
-          t2Body.appendChild(tr);
-        });
-
-        // Table 7
-        const t7Body = document.querySelector('#table7 tbody');
-        t7Body.innerHTML = '';
-        (data.table7 || []).forEach(r => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td style="font-weight: 600;">${r.scenario || r.probe_name}</td>
-            <td style="color: var(--green); font-weight: 700;">${((r.ours || 0) * 100).toFixed(1)}%</td>
-            <td>${((r.fin_mem || 0) * 100).toFixed(1)}%</td>
-            <td>${((r.plain_rag || 0) * 100).toFixed(1)}%</td>
-            <td style="color: var(--cyan); font-weight: 700;">+${(((r.ours || 0) - (r.fin_mem || 0)) * 100).toFixed(1)}%</td>
-          `;
-          t7Body.appendChild(tr);
-        });
-      } catch (err) {}
-    }
-
     window.addEventListener('resize', () => {
       if (currentTab === 'terminal') drawTerminalChart();
-      else if (currentTab === 'performance') renderChart();
     });
   </script>
+  <script src="/app.js"></script>
 </body>
 </html>

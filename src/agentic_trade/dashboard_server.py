@@ -66,28 +66,161 @@ def clean_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     return {k: clean_val(v) for k, v in d.items()}
 
 
+def get_available_tickers() -> list[str]:
+    """Return the study universe, local monitored symbols and symbols held at Alpaca."""
+    from .study.data import UNIVERSE
+
+    tickers: set[str] = set(UNIVERSE)
+    prices_path = DATA_DIR / "prices.csv"
+    if prices_path.exists() and pd is not None:
+        try:
+            frame = pd.read_csv(prices_path, usecols=["ticker"])
+            tickers.update(frame["ticker"].dropna().astype(str).str.upper().unique().tolist())
+        except Exception:
+            pass
+    tickers.update(position["ticker"] for position in get_alpaca_positions())
+    return sorted(tickers or {"TSLA", "AMZN", "MSFT", "NFLX", "COIN"})
+
+
+def _get_alpaca_trading_client() -> Any:
+    """Create the Alpaca paper client when paper credentials are configured."""
+    api_key = os.environ.get("ALPACA_PAPER_KEY") or os.environ.get("ALPACA_KEY")
+    api_secret = os.environ.get("ALPACA_PAPER_SECRET") or os.environ.get("ALPACA_SECRET")
+    if not api_key or not api_secret:
+        return None
+    try:
+        from alpaca.trading.client import TradingClient
+        return TradingClient(api_key, api_secret, paper=True)
+    except Exception:
+        return None
+
+
+def alpaca_mode_enabled() -> bool:
+    return _get_alpaca_trading_client() is not None
+
+
+def get_alpaca_positions() -> list[Dict[str, Any]]:
+    """Read current Alpaca paper positions without mutating the local simulator."""
+    client = _get_alpaca_trading_client()
+    if client is None:
+        return []
+    try:
+        positions = []
+        for position in client.get_all_positions():
+            qty = float(position.qty)
+            avg_price = float(position.avg_entry_price)
+            market_value = float(position.market_value)
+            positions.append({
+                "ticker": str(position.symbol).upper(),
+                "side": "Short" if qty < 0 else "Long",
+                "shares": round(abs(qty), 4),
+                "avg_price": round(avg_price, 2),
+                "current_price": round(market_value / abs(qty), 2) if qty else avg_price,
+                "invested_cost": round(abs(qty) * avg_price, 2),
+                "current_value": round(abs(market_value), 2),
+                "unrealized_pnl": round(float(position.unrealized_pl), 2),
+                "unrealized_pnl_pct": round(float(position.unrealized_plpc) * 100.0, 2),
+                "is_profit": float(position.unrealized_pl) >= 0,
+                "source": "Alpaca paper",
+                "broker_position": True,
+            })
+        return positions
+    except Exception:
+        return []
+
+
+def submit_alpaca_paper_order(
+    ticker: str,
+    action: str,
+    shares: float,
+    order_type: str = "Market",
+    is_ai: bool = False,
+    reasoning: str = "",
+    provider: str = "",
+    model: str = "",
+) -> Dict[str, Any]:
+    """Submit a dashboard order to Alpaca Paper and return an audit-ready record."""
+    client = _get_alpaca_trading_client()
+    if client is None:
+        return {"success": False, "error": "Alpaca Paper credentials are not configured."}
+    if order_type.lower() != "market":
+        return {"success": False, "error": "Dashboard Alpaca execution currently supports Market orders only."}
+    if shares <= 0:
+        return {"success": False, "error": "Share quantity must be greater than zero."}
+    try:
+        from alpaca.trading.enums import OrderSide, TimeInForce
+        from alpaca.trading.requests import MarketOrderRequest
+
+        side = OrderSide.BUY if action.lower() == "buy" else OrderSide.SELL
+        order = client.submit_order(MarketOrderRequest(
+            symbol=ticker.upper(),
+            qty=round(shares, 6),
+            side=side,
+            time_in_force=TimeInForce.DAY,
+        ))
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "ticker": ticker.upper(),
+            "decision": action.title(),
+            "action": action.title(),
+            "shares": round(shares, 6),
+            "price": float(get_latest_prices().get(ticker.upper(), 0.0)),
+            "notional": None,
+            "order_type": "Market",
+            "is_ai": is_ai,
+            "reasoning": reasoning or "Alpaca Paper dashboard execution",
+            "provider": provider,
+            "model": model,
+            "status": str(getattr(order, "status", "accepted")),
+            "order_id": str(getattr(order, "id", "")),
+            "broker": "Alpaca paper",
+        }
+        ORDERS_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with ORDERS_LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+        return {"success": True, "order": record, "portfolio": None}
+    except Exception as exc:
+        return {"success": False, "error": f"Alpaca Paper order failed: {exc}"}
+
+
+def _get_alpaca_latest_prices(tickers: Optional[list[str]] = None) -> Dict[str, float]:
+    """Return latest Alpaca paper prices when market-data credentials are available."""
+    api_key = os.environ.get("ALPACA_PAPER_KEY") or os.environ.get("ALPACA_KEY")
+    api_secret = os.environ.get("ALPACA_PAPER_SECRET") or os.environ.get("ALPACA_SECRET")
+    if not api_key or not api_secret:
+        return {}
+    try:
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockLatestTradeRequest
+
+        symbols = tickers or get_available_tickers()
+        client = StockHistoricalDataClient(api_key, api_secret)
+        trades = client.get_stock_latest_trade(StockLatestTradeRequest(symbol_or_symbols=symbols))
+        return {
+            symbol: round(float(trade.price), 4)
+            for symbol, trade in trades.items()
+            if getattr(trade, "price", None) is not None
+        }
+    except Exception:
+        return {}
+
+
 def get_latest_prices() -> Dict[str, float]:
-    """Retrieve the latest close prices for all tickers."""
+    """Retrieve latest paper-market prices, falling back to the local dataset."""
+    fallback = {"TSLA": 372.22, "AMZN": 248.00, "MSFT": 524.51, "NFLX": 65.85, "COIN": 164.45}
+
+    live_prices = _get_alpaca_latest_prices(get_available_tickers())
+    if live_prices:
+        return {**fallback, **live_prices}
+
     prices_path = DATA_DIR / "prices.csv"
     if not prices_path.exists() or pd is None:
-        return {
-            "TSLA": 372.22,
-            "AMZN": 248.00,
-            "MSFT": 524.51,
-            "NFLX": 65.85,
-            "COIN": 164.45,
-        }
+        return fallback
     try:
         df = pd.read_csv(prices_path)
         return df.groupby("ticker").last()["close"].to_dict()
     except Exception:
-        return {
-            "TSLA": 372.22,
-            "AMZN": 248.00,
-            "MSFT": 524.51,
-            "NFLX": 65.85,
-            "COIN": 164.45,
-        }
+        return fallback
 
 
 def get_summary_data() -> Dict[str, Any]:
@@ -96,24 +229,14 @@ def get_summary_data() -> Dict[str, Any]:
         "project": "Agentic Trade Research & Live Harness",
         "description": "Cognitive Trading Memory System (FinMem Base + 4 Architectural Novelties)",
         "datasets": ["offline", "llm_eval"],
-        "tickers": ["TSLA", "AMZN", "MSFT", "NFLX", "COIN"],
+        "tickers": get_available_tickers(),
         "trials": [0, 1, 2],
         "has_offline": (ARTIFACTS_DIR / "offline" / "metrics.json").exists(),
         "has_matrix": (ARTIFACTS_DIR / "research" / "matrix" / "table2_metrics.csv").exists(),
         "has_orders": (ARTIFACTS_DIR / "paper_trading" / "orders.jsonl").exists(),
         "latest_prices": get_latest_prices(),
+            "alpaca_positions": get_alpaca_positions(),
     }
-
-    # Discover available tickers from data/prices.csv
-    prices_path = DATA_DIR / "prices.csv"
-    if prices_path.exists() and pd is not None:
-        try:
-            df = pd.read_csv(prices_path)
-            tickers = sorted(df["ticker"].dropna().unique().tolist())
-            if tickers:
-                summary["tickers"] = tickers
-        except Exception:
-            pass
 
     # Wilcoxon summary
     wilcoxon_json = ARTIFACTS_DIR / "research" / "matrix" / "wilcoxon.json"
@@ -141,13 +264,31 @@ def get_market_data(ticker: str = "TSLA") -> Dict[str, Any]:
     try:
         df = pd.read_csv(prices_path)
         sub = df[df["ticker"] == ticker].sort_values("date").copy()
+        live_prices = _get_alpaca_latest_prices([ticker])
         if sub.empty:
-            sub = df[df["ticker"] == "TSLA"].sort_values("date").copy()
-            ticker = "TSLA"
+            live_price = live_prices.get(ticker)
+            if live_price is None:
+                sub = df[df["ticker"] == "TSLA"].sort_values("date").copy()
+                ticker = "TSLA"
+            else:
+                now = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
+                sub = pd.DataFrame({"date": [now], "close": [live_price]})
 
         close = sub["close"].astype(float)
         dates = [str(d) for d in sub["date"]]
         prices = [round(float(p), 2) for p in close]
+        live_price = live_prices.get(ticker)
+        price_source = "historical"
+        if live_price is not None:
+            # Keep one in-progress minute candle instead of growing the series every poll.
+            candle_time = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
+            if dates and dates[-1] == candle_time:
+                prices[-1] = round(float(live_price), 2)
+            else:
+                dates.append(candle_time)
+                prices.append(round(float(live_price), 2))
+            close = pd.Series(prices, dtype=float)
+            price_source = "alpaca_paper_live"
 
         # Moving Averages
         sma20 = close.rolling(20, min_periods=1).mean()
@@ -193,10 +334,13 @@ def get_market_data(ticker: str = "TSLA") -> Dict[str, Any]:
                 "volume": int(abs(prices[i] - opens[i]) * 100000 + 500000),
             })
 
+        broker_positions = get_alpaca_positions()
         return {
             "ticker": ticker,
             "latest_price": prices[-1] if prices else 0.0,
             "change_pct": change_pct,
+            "price_source": price_source,
+            "as_of": dates[-1] if dates else None,
             "dates": dates,
             "prices": prices,
             "candles": candles,
@@ -355,11 +499,14 @@ def get_technical_analysis(ticker: str = "TSLA") -> Dict[str, Any]:
 class PortfolioManager:
     """Manages paper trading portfolio state, live executions, and risk settings."""
 
-    def __init__(self, state_file: Path) -> None:
+    def __init__(self, state_file: Path, use_alpaca: bool = False) -> None:
         self.state_file = state_file
+        self.use_alpaca = use_alpaca
         self.cash: float = 100000.0
         self.initial_capital: float = 100000.0
         self.realized_pnl: float = 0.0
+        self.daily_start_equity: float = 100000.0
+        self.daily_start_date: str = datetime.now(timezone.utc).date().isoformat()
         self.positions: Dict[str, Dict[str, Any]] = {}
         self.settings: Dict[str, Any] = {
             "risk_profile": "aggressive",
@@ -381,6 +528,8 @@ class PortfolioManager:
                 self.cash = float(data.get("cash", 100000.0))
                 self.initial_capital = float(data.get("initial_capital", 100000.0))
                 self.realized_pnl = float(data.get("realized_pnl", 0.0))
+                self.daily_start_equity = float(data.get("daily_start_equity", self.initial_capital))
+                self.daily_start_date = str(data.get("daily_start_date", datetime.now(timezone.utc).date().isoformat()))
                 self.positions = data.get("positions", {})
                 self.settings.update(data.get("settings", {}))
             except Exception:
@@ -392,6 +541,8 @@ class PortfolioManager:
             "cash": self.cash,
             "initial_capital": self.initial_capital,
             "realized_pnl": self.realized_pnl,
+            "daily_start_equity": self.daily_start_equity,
+            "daily_start_date": self.daily_start_date,
             "positions": self.positions,
             "settings": self.settings,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -401,7 +552,60 @@ class PortfolioManager:
         except Exception:
             pass
 
+    def _recent_orders(self) -> list[dict[str, Any]]:
+        if not ORDERS_LOG_FILE.exists():
+            return []
+        try:
+            with ORDERS_LOG_FILE.open(encoding="utf-8") as handle:
+                return [json.loads(line) for line in handle if line.strip()][::-1][:50]
+        except Exception:
+            return []
+
+    def _get_alpaca_state(self) -> Dict[str, Any]:
+        client = _get_alpaca_trading_client()
+        if client is None:
+            return {}
+        try:
+            account = client.get_account()
+            equity = float(account.equity)
+            last_equity = float(getattr(account, "last_equity", equity))
+            positions = get_alpaca_positions()
+            daily_pnl = equity - last_equity
+            daily_loss_limit = last_equity * float(self.settings.get("max_daily_loss_pct", 2.0)) / 100.0
+            largest_position_pct = max(
+                ((position["current_value"] / equity * 100.0) if equity else 0.0 for position in positions),
+                default=0.0,
+            )
+            return {
+                "cash": round(float(account.cash), 2),
+                "equity": round(equity, 2),
+                "initial_capital": round(last_equity, 2),
+                "realized_pnl": 0.0,
+                "unrealized_pnl": round(sum(p["unrealized_pnl"] for p in positions), 2),
+                "total_pnl": round(daily_pnl, 2),
+                "total_pnl_pct": round((daily_pnl / last_equity * 100.0) if last_equity else 0.0, 2),
+                "risk": {
+                    "daily_pnl": round(daily_pnl, 2),
+                    "daily_loss_limit": round(daily_loss_limit, 2),
+                    "daily_loss_pct": round((daily_pnl / last_equity * 100.0) if last_equity else 0.0, 2),
+                    "largest_position_pct": round(largest_position_pct, 2),
+                    "max_position_pct": float(self.settings.get("max_position_pct", 25.0)),
+                    "daily_start_date": datetime.now(timezone.utc).date().isoformat(),
+                },
+                "positions": positions,
+                "alpaca_positions": positions,
+                "recent_orders": self._recent_orders(),
+                "settings": {**self.settings, "execution_mode": "alpaca_paper"},
+                "execution_mode": "alpaca_paper",
+            }
+        except Exception as exc:
+            return {"error": f"Unable to read Alpaca Paper account: {exc}"}
+
     def get_state(self, current_prices: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        if self.use_alpaca and alpaca_mode_enabled():
+            broker_state = self._get_alpaca_state()
+            if broker_state and "error" not in broker_state:
+                return broker_state
         prices = current_prices or get_latest_prices()
         unrealized_pnl = 0.0
         position_list = []
@@ -414,6 +618,7 @@ class PortfolioManager:
             mark = float(prices.get(ticker, avg))
             side = pos.get("side", "Long")
 
+            invested_cost = qty * avg
             if side == "Long":
                 pos_val = qty * mark
                 u_pnl = (mark - avg) * qty
@@ -421,7 +626,7 @@ class PortfolioManager:
                 pos_val = qty * avg - (mark - avg) * qty
                 u_pnl = (avg - mark) * qty
 
-            u_pnl_pct = (u_pnl / (qty * avg) * 100.0) if (qty * avg) > 0 else 0.0
+            u_pnl_pct = (u_pnl / invested_cost * 100.0) if invested_cost > 0 else 0.0
             unrealized_pnl += u_pnl
 
             position_list.append({
@@ -430,9 +635,11 @@ class PortfolioManager:
                 "shares": round(qty, 4),
                 "avg_price": round(avg, 2),
                 "current_price": round(mark, 2),
+                "invested_cost": round(invested_cost, 2),
                 "current_value": round(pos_val, 2),
                 "unrealized_pnl": round(u_pnl, 2),
                 "unrealized_pnl_pct": round(u_pnl_pct, 2),
+                "is_profit": u_pnl >= 0,
                 "stop_loss": pos.get("stop_loss"),
                 "take_profit": pos.get("take_profit"),
             })
@@ -440,6 +647,13 @@ class PortfolioManager:
         total_equity = self.cash + sum(p["current_value"] for p in position_list)
         total_pnl = self.realized_pnl + unrealized_pnl
         total_pnl_pct = (total_pnl / self.initial_capital * 100.0) if self.initial_capital > 0 else 0.0
+        daily_pnl = total_equity - self.daily_start_equity
+        daily_loss_limit = self.daily_start_equity * float(self.settings.get("max_daily_loss_pct", 2.0)) / 100.0
+        largest_position_pct = max(
+            ((p["current_value"] / total_equity * 100.0) if total_equity > 0 else 0.0 for p in position_list),
+            default=0.0,
+        )
+        broker_positions = get_alpaca_positions()
 
         # Load recent orders
         recent_orders = []
@@ -461,7 +675,16 @@ class PortfolioManager:
             "unrealized_pnl": round(unrealized_pnl, 2),
             "total_pnl": round(total_pnl, 2),
             "total_pnl_pct": round(total_pnl_pct, 2),
+            "risk": {
+                "daily_pnl": round(daily_pnl, 2),
+                "daily_loss_limit": round(daily_loss_limit, 2),
+                "daily_loss_pct": round((daily_pnl / self.daily_start_equity * 100.0) if self.daily_start_equity else 0.0, 2),
+                "largest_position_pct": round(largest_position_pct, 2),
+                "max_position_pct": float(self.settings.get("max_position_pct", 25.0)),
+                "daily_start_date": self.daily_start_date,
+            },
             "positions": position_list,
+            "alpaca_positions": broker_positions,
             "recent_orders": recent_orders[::-1][:50],
             "settings": self.settings,
         }
@@ -481,11 +704,55 @@ class PortfolioManager:
     ) -> Dict[str, Any]:
         ticker = ticker.upper()
         action = action.title()
+        if self.use_alpaca and alpaca_mode_enabled():
+            return submit_alpaca_paper_order(
+                ticker, action, shares, order_type, is_ai=is_ai,
+                reasoning=reasoning, provider=provider, model=model,
+            )
         prices = get_latest_prices()
         price = prices.get(ticker, 100.0)
         notional = shares * price
 
+        today = datetime.now(timezone.utc).date().isoformat()
+        if self.daily_start_date != today:
+            self.daily_start_date = today
+            self.daily_start_equity = self.cash + sum(
+                float(pos.get("shares", 0.0)) * float(prices.get(symbol, pos.get("avg_price", 0.0)))
+                for symbol, pos in self.positions.items()
+            )
+
         if action == "Buy":
+            current_equity = self.cash + sum(
+                float(pos.get("shares", 0.0)) * float(prices.get(symbol, pos.get("avg_price", 0.0)))
+                for symbol, pos in self.positions.items()
+            )
+            max_position_pct = float(self.settings.get("max_position_pct", 25.0)) / 100.0
+            existing_value = float(self.positions.get(ticker, {}).get("shares", 0.0)) * price
+            max_position_value = current_equity * max_position_pct
+            if existing_value + notional > max_position_value + 0.01:
+                remaining = max(0.0, max_position_value - existing_value)
+                return {
+                    "success": False,
+                    "error": (
+                        f"Risk limit: {ticker} position would exceed {max_position_pct:.0%} of equity. "
+                        f"Maximum additional notional is ${remaining:,.2f}."
+                    ),
+                    "risk_limit": "max_position_pct",
+                }
+
+            current_equity = self.cash + sum(
+                float(pos.get("shares", 0.0)) * float(prices.get(symbol, pos.get("avg_price", 0.0)))
+                for symbol, pos in self.positions.items()
+            )
+            current_pnl = current_equity - self.daily_start_equity
+            max_daily_loss_pct = float(self.settings.get("max_daily_loss_pct", 2.0)) / 100.0
+            if current_pnl < -(self.daily_start_equity * max_daily_loss_pct):
+                return {
+                    "success": False,
+                    "error": f"Risk limit: trading paused after {current_pnl:,.2f} daily loss exceeded {max_daily_loss_pct:.1%} limit.",
+                    "risk_limit": "max_daily_loss_pct",
+                }
+
             if self.cash < notional:
                 # Cap to available cash
                 if self.cash < price:
@@ -561,25 +828,39 @@ class PortfolioManager:
         self.save()
         return {"success": True, "order": order_record, "portfolio": self.get_state()}
 
-    def close_position(self, ticker: str) -> Dict[str, Any]:
+    def close_position(self, ticker: str, shares: Optional[float] = None) -> Dict[str, Any]:
         ticker = ticker.upper()
+        if self.use_alpaca and alpaca_mode_enabled():
+            position = next((p for p in get_alpaca_positions() if p["ticker"] == ticker), None)
+            if position is None:
+                return {"success": False, "error": f"No Alpaca Paper position in {ticker}."}
+            qty = min(float(position["shares"]), float(shares)) if shares and float(shares) > 0 else float(position["shares"])
+            action = "Buy" if position["side"] == "Short" else "Sell"
+            return submit_alpaca_paper_order(ticker, action, qty, "Market", reasoning=f"Closed Alpaca Paper position in {ticker}")
         if ticker not in self.positions:
             return {"success": False, "error": f"No open position in {ticker}."}
 
         pos = self.positions[ticker]
-        shares = pos["shares"]
+        total_shares = float(pos.get("shares", 0.0))
+        shares_to_sell = min(total_shares, float(shares)) if (shares and float(shares) > 0) else total_shares
+        side = pos.get("side", "Long")
+        action = "Sell" if side == "Long" else "Buy"
         return self.execute_order(
             ticker=ticker,
-            action="Sell",
-            shares=shares,
+            action=action,
+            shares=shares_to_sell,
             order_type="Market",
-            reasoning=f"Closed position in {ticker}",
+            reasoning=f"Closed {shares_to_sell:g}/{total_shares:g} shares in {ticker}",
         )
 
     def reset(self, initial_capital: float = 100000.0) -> Dict[str, Any]:
+        if self.use_alpaca and alpaca_mode_enabled():
+            return {"success": False, "error": "Reset is disabled in Alpaca Paper mode. Manage the account in Alpaca."}
         self.cash = initial_capital
         self.initial_capital = initial_capital
         self.realized_pnl = 0.0
+        self.daily_start_equity = initial_capital
+        self.daily_start_date = datetime.now(timezone.utc).date().isoformat()
         self.positions = {}
         self.save()
         return {"success": True, "portfolio": self.get_state()}
@@ -591,97 +872,51 @@ class PortfolioManager:
 
 
 # Global portfolio manager instance
-portfolio_mgr = PortfolioManager(PORTFOLIO_STATE_FILE)
+portfolio_mgr = PortfolioManager(PORTFOLIO_STATE_FILE, use_alpaca=True)
+
+
+def _position_sign(ticker: str) -> float:
+    pos = portfolio_mgr.positions.get(ticker)
+    if not pos:
+        return 0.0
+    shares = float(pos.get("shares", 0.0))
+    return 1.0 if shares > 0 else -1.0 if shares < 0 else 0.0
 
 
 def execute_ai_trade(
     ticker: str = "TSLA",
     risk_mode: Optional[str] = None,
     provider: Optional[str] = None,
+    backbone: Optional[str] = None,
+    use_llm: bool = True,
 ) -> Dict[str, Any]:
-    """Execute live AI decision for ticker using Groq + OpenRouter failover."""
+    """Run the research memory agent (Ours) for ``ticker`` and route its decision to the
+    paper portfolio. The LLM sees the same context as in the backbone experiment; if the
+    LLM is unavailable the rule/price-model consensus is used instead."""
+    from .agent_service import service
+
     ticker = ticker.upper()
-    active_risk = risk_mode or portfolio_mgr.settings.get("risk_profile", "aggressive")
-    active_provider = provider or portfolio_mgr.settings.get("provider", "auto")
-
-    # Load news events from data
-    memories: List[Dict[str, Any]] = []
-    news_csv = DATA_DIR / "multi_ticker_news.csv"
-    if news_csv.exists() and pd is not None:
+    active_risk = risk_mode or portfolio_mgr.settings.get("risk_profile", "standard")
+    position = _position_sign(ticker)
+    llm_info: Dict[str, Any] = {}
+    if use_llm:
         try:
-            df = pd.read_csv(news_csv)
-            sub = df[df["ticker"] == ticker].tail(5)
-            for idx, row in sub.iterrows():
-                memories.append({
-                    "id": str(row.get("source_id", idx)),
-                    "source": str(row.get("source_type", "news")),
-                    "date": str(row.get("date", "2026-10-23")),
-                    "text": str(row.get("text", "")),
-                })
-        except Exception:
-            pass
-
-    # Momentum
-    momentum = 0.01
-    prices_csv = DATA_DIR / "prices.csv"
-    if prices_csv.exists() and pd is not None:
-        try:
-            p_df = pd.read_csv(prices_csv)
-            ts = p_df[p_df["ticker"] == ticker].sort_values("date")["close"].values
-            if len(ts) >= 5:
-                momentum = float((ts[-1] - ts[-5]) / ts[-5])
-        except Exception:
-            pass
-
-    client = OpenRouterClient(
-        temperature=0.3,
-        primary_provider=active_provider,
-        cache_dir=ARTIFACTS_DIR / "llm_cache",
-    )
-
-    decision = client.decide(
-        system_name="ours",
-        ticker=ticker,
-        decision_date="2026-10-23",
-        momentum=momentum,
-        memories=memories,
-        risk_mode=active_risk,
-    )
-
-    action = decision.get("action", "Hold")
-    reasoning = decision.get("reasoning", "")
-    provider_used = decision.get("provider", "groq")
-    model_used = decision.get("model", "openai/gpt-oss-120b")
-    cited_ids = decision.get("cited_memory_ids", [])
-
-    order_result = None
-    if action == "Buy":
-        # Calculate sizing: 15% of cash or $5,000
-        budget = min(portfolio_mgr.cash * 0.15, 5000.0)
-        p = get_latest_prices().get(ticker, 100.0)
-        shares = budget / p if p > 0 else 1.0
-        order_result = portfolio_mgr.execute_order(
-            ticker=ticker,
-            action="Buy",
-            shares=shares,
-            is_ai=True,
-            reasoning=f"AI [{provider_used.upper()} / {model_used}]: {reasoning}",
-            provider=provider_used,
-            model=model_used,
-        )
-    elif action == "Sell":
-        if ticker in portfolio_mgr.positions:
-            shares = portfolio_mgr.positions[ticker]["shares"]
-            order_result = portfolio_mgr.execute_order(
-                ticker=ticker,
-                action="Sell",
-                shares=shares,
-                is_ai=True,
-                reasoning=f"AI [{provider_used.upper()} / {model_used}]: {reasoning}",
-                provider=provider_used,
-                model=model_used,
-            )
-
+            llm_info = service.llm_decide(ticker, backbone or portfolio_mgr.settings.get("agent_backbone", "gpt-oss-120b"), position)
+        except Exception as exc:  # fall back to the deterministic consensus
+            llm_info = {"error": str(exc)}
+    decision = (llm_info.get("decision") or {}) if llm_info else {}
+    if decision.get("status", "").startswith("ok"):
+        brief = llm_info["brief"]
+        action = decision["action"]
+        reasoning = decision.get("reasoning", "")
+        provider_used, model_used = llm_info["provider"], llm_info["model"]
+        cited_ids = decision.get("cited_ids", [])
+    else:
+        brief = service.brief(ticker, position=position)
+        action = brief["consensus"]["action"]
+        reasoning = "; ".join(brief["consensus"]["reasons"])
+        provider_used, model_used, cited_ids = "rule", "memory+price consensus", []
+    order_result = _route_agent_order(ticker, action, reasoning, provider_used, model_used, brief.get("price"))
     return {
         "success": True,
         "ticker": ticker,
@@ -691,9 +926,35 @@ def execute_ai_trade(
         "model": model_used,
         "cited_memory_ids": cited_ids,
         "risk_mode": active_risk,
-        "order": order_result["order"] if order_result else None,
+        "brief": brief,
+        "llm_error": llm_info.get("error") or (decision.get("status") if decision and not decision.get("status", "").startswith("ok") else None),
+        "order": order_result["order"] if order_result and "order" in order_result else None,
+        "order_error": order_result.get("error") if order_result else None,
         "portfolio": portfolio_mgr.get_state(),
     }
+
+
+def _route_agent_order(ticker: str, action: str, reasoning: str, provider: str, model: str,
+                       ref_price: Optional[float]) -> Optional[Dict[str, Any]]:
+    """Buy opens/extends a long sized by ``max_position_pct``; Sell closes a long.
+    Hold leaves the position unchanged (FinMem action semantics)."""
+    if action == "Buy":
+        state = portfolio_mgr.get_state()
+        equity = float(state.get("equity", portfolio_mgr.cash))
+        budget = min(portfolio_mgr.cash, equity * float(portfolio_mgr.settings.get("max_position_pct", 25.0)) / 100.0)
+        held = portfolio_mgr.positions.get(ticker, {})
+        price = get_latest_prices().get(ticker) or ref_price or 0.0
+        budget -= float(held.get("shares", 0.0)) * price
+        if budget <= 0 or price <= 0:
+            return {"error": "position already at the max_position_pct limit"}
+        return portfolio_mgr.execute_order(ticker=ticker, action="Buy", shares=budget / price, is_ai=True,
+                                           reasoning=f"Agent [{provider} / {model}]: {reasoning}",
+                                           provider=provider, model=model)
+    if action == "Sell" and ticker in portfolio_mgr.positions:
+        return portfolio_mgr.execute_order(ticker=ticker, action="Sell", shares=portfolio_mgr.positions[ticker]["shares"],
+                                           is_ai=True, reasoning=f"Agent [{provider} / {model}]: {reasoning}",
+                                           provider=provider, model=model)
+    return None
 
 
 def get_equity_data(dataset: str = "offline", ticker: str = "TSLA", trial: int = 0) -> Dict[str, Any]:
@@ -978,6 +1239,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(get_summary_data())
             return
 
+        if path.startswith("/api/agent/") or path == "/api/research" or path.startswith("/figures/"):
+            self._agent_get(path, query)
+            return
+
         if path == "/api/market_data":
             ticker = query.get("ticker", ["TSLA"])[0]
             self._send_json(get_market_data(ticker=ticker))
@@ -1075,6 +1340,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 body = {}
 
+        if path.startswith("/api/agent/"):
+            self._agent_post(path, body)
+            return
+
         if path == "/api/manual_trade":
             ticker = str(body.get("ticker", "TSLA")).upper()
             action = str(body.get("action", "Buy")).title()
@@ -1109,7 +1378,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/close_position":
             ticker = str(body.get("ticker", "TSLA")).upper()
-            res = portfolio_mgr.close_position(ticker)
+            shares = float(body.get("shares")) if body.get("shares") else None
+            res = portfolio_mgr.close_position(ticker, shares=shares)
             self._send_json(res)
             return
 
@@ -1149,6 +1419,67 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
         self.send_response(404)
         self.end_headers()
+
+    def _agent_get(self, path: str, query: Dict[str, list]) -> None:
+        from .agent_service import FIGURE_DIR, service
+
+        q = lambda key, default=None: (query.get(key) or [default])[0]
+        try:
+            if path == "/api/agent/status":
+                self._send_json(service.status())
+            elif path == "/api/agent/brief":
+                ticker = str(q("ticker", "TSLA")).upper()
+                self._send_json(service.brief(ticker, q("date"), _position_sign(ticker)))
+            elif path == "/api/agent/scan":
+                self._send_json(service.scan({t: _position_sign(t) for t in portfolio_mgr.positions}))
+            elif path == "/api/research":
+                self._send_json(service.research(str(q("protocol", "rolling"))))
+            elif path.startswith("/figures/"):
+                name = Path(path).name
+                target = FIGURE_DIR / name
+                if target.suffix != ".png" or not target.exists() or target.parent != FIGURE_DIR:
+                    self.send_response(404); self.end_headers(); return
+                blob = target.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(blob)))
+                self.send_header("Cache-Control", "max-age=300")
+                self.end_headers()
+                self.wfile.write(blob)
+            else:
+                self._send_json({"error": "not found"}, status=404)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+
+    def _agent_post(self, path: str, body: Dict[str, Any]) -> None:
+        from .agent_service import service
+
+        try:
+            if path == "/api/agent/llm":
+                ticker = str(body.get("ticker", "TSLA")).upper()
+                self._send_json(service.llm_decide(ticker, str(body.get("backbone", "gpt-oss-120b")), _position_sign(ticker)))
+            elif path == "/api/agent/execute":
+                ticker = str(body.get("ticker", "TSLA")).upper()
+                action = str(body.get("action", "Hold")).title()
+                if action not in ("Buy", "Sell", "Hold"):
+                    raise ValueError("action must be Buy, Sell or Hold")
+                res = _route_agent_order(ticker, action, str(body.get("reasoning", "manual approval of agent recommendation")),
+                                         str(body.get("provider", "agent")), str(body.get("model", "memory agent")), body.get("price"))
+                self._send_json({"success": bool(res and "order" in res) or action == "Hold", "result": res,
+                                 "portfolio": portfolio_mgr.get_state()})
+            elif path == "/api/agent/run":
+                ticker = str(body.get("ticker", "TSLA")).upper()
+                self._send_json(execute_ai_trade(ticker, backbone=body.get("backbone"), use_llm=bool(body.get("use_llm", True))))
+            elif path == "/api/agent/refresh":
+                self._send_json(service.refresh())
+            else:
+                self._send_json({"error": "not found"}, status=404)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
 
     def _send_json(self, data: Any, status: int = 200) -> None:
         blob = json.dumps(data, indent=2).encode("utf-8")

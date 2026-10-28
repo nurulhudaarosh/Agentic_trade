@@ -107,7 +107,7 @@ While FinMem introduced layered decay, it suffers from critical real-world limit
 │   ├── run_research.py      <- Full paper benchmark suite runner (--all, --matrix, etc.)
 │   ├── run_live.py          <- Groq + Alpaca wrapper (`--execute`, `--live`)
 │   └── fetch_real_data.py   <- Alpaca News & yfinance live ingestion with pagination
-├── tests/                   <- 36 unit and integration tests (100% pass required)
+├── tests/                   <- unit and integration tests (100% pass required)
 │   ├── test_memory.py       <- Leakage, topics, retirement, recall, source categories
 │   ├── test_engine.py       <- Backtest execution, relationships, daily returns
 │   ├── test_paper_trader.py <- Order limits, Sell closing, shorting, reconcile
@@ -146,7 +146,7 @@ When working or modifying code in this repository, any automated agent MUST obse
 5. **Matplotlib Headless Safety**:
    - Keep `os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")` in `__init__.py` and modules importing `matplotlib` to ensure non-interactive execution without permission errors.
 6. **Test Suite Integrity**:
-   - All 36 tests in `tests/` MUST pass at all times:
+   - All tests in `tests/` (64 as of the one-year study) MUST pass at all times:
      ```bash
      .venv/bin/pytest -v
      ```
