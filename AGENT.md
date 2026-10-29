@@ -4,124 +4,66 @@ This document is the definitive guide and operational contract for AI agent harn
 
 ---
 
-## 1. Research Foundation & Base Paper Alignment
+## 1. Research Foundation
 
-### Base Paper: FinMem (arXiv:2311.13743)
-- **Title**: *FINMEM: A Performance-Enhanced LLM Trading Agent with Layered Memory and Character Design* (Yu et al., Stevens Institute of Technology).
-- **Core Concept**: Emulates human cognitive processing (Craik & Lockhart, 1972) by stratifying financial data into three decay layers:
-  1. **Shallow Layer**: Daily market news ($\tau \approx 14$ days decay).
-  2. **Intermediate Layer**: Quarterly 10-Q filings ($\tau \approx 90$ days decay).
-  3. **Deep Layer**: Annual 10-K filings and extended reflections ($\tau \approx 365$ days decay).
-- **FinMem Profiling & Decision Making**: Character definition with risk inclinations (Risk-Seeking, Risk-Averse, Self-Adaptive) and discrete trading decisions (`Buy`, `Sell`, `Hold`).
+### Base paper and main baseline: FinMem (arXiv:2311.13743)
+*FINMEM: A Performance-Enhanced LLM Trading Agent with Layered Memory and Character Design* (Yu et al.).
+Three decay layers (shallow news Q=14 days, intermediate 10-Q Q=90, deep 10-K Q=365), recency + relevancy +
+importance scoring, purge rules, access-counter promotion, top-K per layer, a self-adaptive risk character and
+Buy/Sell/Hold decisions. We re-implement it faithfully in `study/memory.py` (`fin_mem`) as the main baseline.
 
-### Our System ("Ours"): What Was Missing in FinMem & Our Core Novelties
+### Our system: self-correcting agent memory (Remember, Verify, Act)
+`ours` in `src/agentic_trade/study/memory.py` keeps the FinMem core and adds seven switchable components:
 
-While FinMem introduced layered decay, it suffers from critical real-world limitations that our architecture explicitly solves:
+| Role | Component | Mechanism |
+|---|---|---|
+| Remember | N2 near-duplicate consolidation | cosine >= 0.88, same layer and polarity sign -> merge, count corroboration |
+| | N4 situational query | query = normalize(task embedding + mean embedding of today's articles) |
+| | N5 data-driven importance | v from tone strength and news-attention surprise instead of a random draw |
+| | N6 point-in-time peer graph | 120-day co-mention graph, top-3 peers, same-day peer news |
+| Verify | N1 hierarchical source credibility | Beta-Bernoulli hit rate shrunk author -> category -> global (prior 8), market-adjusted |
+| | N3 contradiction retirement | cosine >= 0.72, opposite polarity, both abs(s) >= 0.3 -> older memory retired |
+| | N7 outcome-aware episodic recall | 10 most similar past contexts (>= 5 needed); abstain when their signed edge < 0 |
+| Act | policies and guardrails | threshold rule, LogReg/LightGBM, LLM backbones; the app's autopilot guardrail |
 
-```
-+---------------------------------------------------------------------------------------+
-|                                    OURS ARCHITECTURE                                  |
-|                                                                                       |
-|  +--------------------+   +-----------------------+   +----------------------------+  |
-|  | Learned Provenance |   | Dynamic Contradiction |   | Episodic Decision Outcome  |  |
-|  |    Reliability     |   |      Retirement       |   |       Memory Recall        |  |
-|  | (Hit-rate learning |   | (Deactivates stale/   |   | (Resolves at t+1; recalls  |  |
-|  |  from train slice) |   |  contradicted facts)  |   |  prior similar outcomes)   |  |
-|  +---------+----------+   +-----------+-----------+   +-------------+--------------+  |
-|            |                          |                             |                 |
-|            +--------------------------+-----------------------------+                 |
-|                                       v                                               |
-|                    +------------------------------------+                             |
-|                    |   Hierarchical Retrieval Engine    |                             |
-|                    |  - Stratified layers (10K/10Q/News)|                             |
-|                    |  - Topic keyword alignment         |                             |
-|                    |  - Cross-ticker relationship score |                             |
-|                    |  - Strict point-in-time filtering  |                             |
-|                    +------------------+-----------------+                             |
-|                                       |                                               |
-|                                       v                                               |
-|                    +------------------------------------+                             |
-|                    |    Execution & Decision Engine     |                             |
-|                    |  - Risk Modes (Std/Cons/Aggr)      |                             |
-|                    |  - Position-aware Paper Trader     |                             |
-|                    |  - Automated Reconciliation        |                             |
-|                    +------------------------------------+                             |
-+---------------------------------------------------------------------------------------+
-```
-
-1. **Dynamic Source Provenance & Hit-Rate Reliability**:
-   - *FinMem Flaw*: Treats all sources within a layer equally. Analyst rumors and SEC audited filings have identical trust.
-   - *Our Novelty*: Evaluates source predictive accuracy during the training period ($r_s = \frac{\sum hits}{N} \in [0.5, 1.0]$ where hit = $sentiment \times \Delta close_{t+1} > 0$). Publisher attribution is used when available; otherwise events fall back to a source-genre category (`media`, `analyst_note`, `press_release`). Reliability is smoothed toward a 0.7 prior and requires at least two observations. On the checked-in snapshot only two genres have enough support, so this is a small-sample estimate.
-2. **Active Contradiction Retirement & Fact Reconciliation**:
-   - *FinMem Flaw*: Pure time decay. When an event is reversed (e.g., an acquisition blocked or a guidance miss announced after optimism), the outdated fact lingers in memory and pollutes decisions.
-   - *Our Novelty*: When an incoming event in the same layer shares topic tags with an older event but has opposite sentiment ($sentiment_{old} \times sentiment_{new} < 0$), the older event is marked `active = False` and retired.
-3. **Resolved Episodic Decision Outcome Memory**:
-   - *FinMem Flaw*: Extended reflections summarize trends, but the model cannot query past decisions indexed by topic and see what *actually happened*.
-   - *Our Novelty*: Each trading decision is recorded alongside its topic tags. When next-day price settles, the engine calls `resolve(decision_date, realized_return)`. When future similar market topics emerge, `recall(topics)` feeds the past decision and its realized return directly into prompt context.
-4. **Supply Chain & Multi-Ticker Relationship Graph Awareness**:
-   - *FinMem Flaw*: Single-ticker isolation. Fails to incorporate supplier, customer, or competitor dynamics.
-   - *Our Novelty*: Ingests `related_tickers` from [`data/relationships.csv`](data/relationships.csv) and indexed event rows. Applies the relationship scoring bonus only to events from a *related* ticker, so cross-company evidence can surface without flooding the results with unrelated headlines.
-5. **Pre-Registered Probe Retrieval Benchmark (Table 7)**:
-   - *FinMem Flaw*: No direct ground-truth retrieval evaluation.
-   - *Our Novelty*: Built-in benchmark measuring $Hit@1$, $Hit@3$, $Hit@5$, $MRR$, and $Precision@5$ across 17 pre-registered, ticker-scoped corporate relationship, guidance, and legal risk queries (`agentic_trade.probes`).
-6. **Production Execution Adapter & Portfolio Reconciliation**:
-   - *FinMem Flaw*: Theoretical action tokens only.
-   - *Our Novelty*: Position-aware paper trading (`agentic-paper`), budget capping (20%), position liquidation on `Sell`, short support (`--allow-short`), and portfolio reconciliation (`--reconcile`).
+Results, limitations and every design decision are in `paper/RESEARCH_LOG.md` and the report
+(`paper/uiu_template/`). Headline: best memory design on Sharpe and drawdown, not statistically significant.
 
 ---
 
-## 2. Repository Layout & File Manifest
+## 2. Repository Layout
 
 ```text
-├── AGENT.md                 <- (This file) Operational specification for agent harnesses
-├── README.md                <- Quickstart and user guide
-├── RESEARCH_PAPER.md        <- Research paper draft comparing FinMem vs. Ours
-├── PAPER_TRADING.md         <- Alpaca paper trading and position reconciliation guide
-├── FinMem.pdf               <- The base paper (Yu et al., arXiv:2311.13743)
-├── pyproject.toml           <- Package metadata, dependencies, scripts, pytest config
-├── requirements.txt         <- Pinned core and optional dependencies
-├── run_experiment.py        <- Compatibility CLI runner for baseline offline backtest
-├── decisions.csv            <- Sample agent decisions input for paper trading
-├── configs/                 <- Declarative YAML experiment configurations
-│   ├── offline_tsla.yaml    <- Deterministic baseline offline config
-│   ├── multi_ticker.yaml    <- 5-ticker matrix configuration
-│   ├── risk_conservative.yaml <- Conservative risk profile config
-│   └── risk_aggressive.yaml   <- Aggressive risk profile config
-├── data/                    <- Checked-in point-in-time market data
-│   ├── multi_ticker_news.csv<- Ingested news events (TSLA, NFLX, AMZN, MSFT, COIN)
-│   ├── prices.csv           <- Daily close prices
-│   └── relationships.csv    <- Static peer/supply-chain graph (`related_tickers`)
-├── src/agentic_trade/       <- Core research package
-│   ├── __init__.py          <- Package root (configures MPLCONFIGDIR=/tmp/matplotlib)
-│   ├── cli.py               <- CLI entrypoint (`agentic-trade`) with YAML config support
-│   ├── engine.py            <- ExperimentEngine, ExperimentConfig, backtest loop
-│   ├── memory.py            <- MemorySystem, NoMemory, PlainRAG, FinMem, OursMemory
-│   ├── paper_trader.py      <- PaperBroker, PaperTradingAgent (`agentic-paper`)
-│   ├── live_trader.py       <- Groq decisions + Alpaca execution (`agentic-live`)
-│   ├── dashboard_server.py  <- Zero-dependency dashboard HTTP server (`agentic-dashboard`)
-│   ├── research.py          <- Multi-ticker matrix, Wilcoxon, sweeps (`agentic-research`)
-│   ├── probes.py            <- Table 7 memory probe retrieval benchmark
-│   ├── case_studies.py      <- Deterministic pre-registered case card builder
-│   └── llm.py               <- OpenRouter / Groq / OpenAI LLM decision client
-├── scripts/                 <- Research automation scripts
-│   ├── run_research.py      <- Full paper benchmark suite runner (--all, --matrix, etc.)
-│   ├── run_live.py          <- Groq + Alpaca wrapper (`--execute`, `--live`)
-│   └── fetch_real_data.py   <- Alpaca News & yfinance live ingestion with pagination
-├── tests/                   <- unit and integration tests (100% pass required)
-│   ├── test_memory.py       <- Leakage, topics, retirement, recall, source categories
-│   ├── test_engine.py       <- Backtest execution, relationships, daily returns
-│   ├── test_paper_trader.py <- Order limits, Sell closing, shorting, reconcile
-│   ├── test_live_trader.py  <- Groq decision flow, history, live opt-in guard
-│   ├── test_dashboard.py    <- Dashboard data loaders and API payloads
-│   ├── test_llm.py          <- Parser validation, fallback to Hold on missing credentials, risk profile prompt differentiation
-│   ├── test_case_studies.py <- Trial deduplication, case card structure
-│   ├── test_config.py       <- YAML configuration parsing and serialization
-│   ├── test_probes.py       <- Hit@K/MRR/Precision, ticker isolation
-│   └── test_research.py     <- Paired Wilcoxon stats, Table 6 ablation consolidation
-└── paper/                   <- Publication artifacts and status
-    ├── README.md            <- Overview of generated paper figures
-    ├── EXPERIMENT_STATUS.md <- Status tracking of empirical tables and limitations
-    └── figures/             <- High-resolution plots for publication
+├── README.md, AGENT.md, PAPER_TRADING.md, FinMem.pdf
+├── src/agentic_trade/
+│   ├── study/                 <- one-year study (the research of the report)
+│   │   ├── data.py            <- download, point-in-time alignment, incremental refresh
+│   │   ├── annotate.py        <- FinBERT polarity, MiniLM embeddings, headline categories
+│   │   ├── memory.py          <- Plain RAG, faithful FinMem, Ours (N1-N7 flags)
+│   │   ├── backtest.py        <- day-major replay of all memories
+│   │   ├── policies.py        <- threshold rule, rule baselines, LogReg/LightGBM
+│   │   ├── evaluation.py      <- metrics, Wilcoxon/Holm, Diebold-Mariano, bootstrap, IC
+│   │   ├── pipeline.py        <- rolling and fixed protocols
+│   │   ├── llm_agent.py       <- LLM backbone experiment (Groq key pool, prompt cache)
+│   │   ├── extensions.py      <- GRU, Transformers, Q-learning, pattern analogues, CAPM, power
+│   │   └── figures.py         <- figures 1-20
+│   ├── dashboard_server.py    <- HTTP API of the application (`agentic-dashboard`)
+│   ├── agent_service.py       <- research agent used by the app (brief, consensus, LLM decision)
+│   ├── autopilot.py           <- budget, hard guardrail, permission modes, approval queue, scheduler
+│   ├── analytics.py           <- pattern analogues, risk, correlation, allocation, Monte Carlo
+│   ├── algorithms.py          <- algorithm board and the app's Q-learning agent
+│   ├── credentials.py         <- API keys verified with the provider, stored owner-only
+│   └── engine.py, memory.py, research.py, probes.py, case_studies.py, paper_trader.py,
+│       live_trader.py, llm.py, cli.py   <- legacy 5-week prototype and its CLIs
+├── dashboard/                 <- front end: index.html, app.css, core.js, i18n.js (EN/BN), charts.js,
+│                                 trade.js, autopilot.js, analytics.js, app.js, credentials.js
+├── scripts/                   <- build_dataset, run_study, run_llm_study, run_extensions,
+│                                 make_extension_figures, export_latex_tables, export_extension_tables,
+│                                 capture_app_screens, crop_paper_screens, run_dashboard (+ legacy scripts)
+├── data/study/                <- one-year dataset (news, filings, bars, annotations)
+├── artifacts/study/           <- study outputs (signals, evidence, rolling/, fixed/, llm/)
+├── tests/                     <- 93 tests (study, autopilot, analytics, algorithms, credentials, legacy)
+└── paper/                     <- report (uiu_template/), figures/, RESEARCH_LOG.md
 ```
 
 ---
@@ -146,7 +88,7 @@ When working or modifying code in this repository, any automated agent MUST obse
 5. **Matplotlib Headless Safety**:
    - Keep `os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")` in `__init__.py` and modules importing `matplotlib` to ensure non-interactive execution without permission errors.
 6. **Test Suite Integrity**:
-   - All tests in `tests/` (64 as of the one-year study) MUST pass at all times:
+   - All tests in `tests/` (93) MUST pass at all times:
      ```bash
      .venv/bin/pytest -v
      ```
@@ -160,11 +102,19 @@ When working or modifying code in this repository, any automated agent MUST obse
 9. **Execution Safety**:
    - Paper trading is the default. Live orders require `--live` **and** `ALPACA_LIVE_CONFIRM=YES`; never weaken this guard.
    - The offline snapshot is news-only (no 10-Q/10-K); do not claim layer ablations are exercised unless filing data is present.
-10. **LLM Character & Risk Mode Profiling**:
+10. **Study invariants**:
+   - The study replay is day-major: all tickers advance together, so shared state (credibility) only uses outcomes already public.
+   - An item is visible only from the first 16:00 New York close at or after its timestamp; outcomes of day-t decisions resolve at close t+1.
+   - Every table in `paper/uiu_template/tables/` is generated by a script; never edit them by hand.
+11. **Application safety**:
+   - Every autopilot order goes through `autopilot.gate`; never add an execution path that bypasses it, for any broker.
+   - Risk-reducing sells are only blocked by the emergency stop; the agent never opens short positions.
+   - API keys are never returned unmasked to the browser; key endpoints accept only same-origin local requests.
+12. **LLM Character & Risk Mode Profiling (legacy `agentic-live`)**:
    - To prevent passive "all-Hold" collapse, LLM prompts must inject character design per `--risk-mode` (`aggressive`, `standard`, `conservative`).
    - Caches under `artifacts/llm_cache/` MUST key on `(model, temperature, prompt, system_prompt, risk_mode)` so changing risk profile generates distinct decision samples.
 
-### Known Limitations of the Offline Snapshot
+### Known Limitations of the Legacy Offline Snapshot (prototype only)
 
 - News covers `2026-06-01..2026-07-09`; the default split is train `06-01..06-15`, test `06-16..07-09`.
 - All sources are `news`; intermediate/deep layers are dormant, so `fin_mem` equals `plain_rag`.
@@ -173,7 +123,9 @@ When working or modifying code in this repository, any automated agent MUST obse
 
 ---
 
-## 4. Standard Operational Playbook
+## 4. Operational Playbook
+
+One-year study and application: see `README.md` sections 1 and 3. The commands below are for the legacy prototype.
 
 ### A. Run Default Baseline Backtest
 ```bash
@@ -229,7 +181,9 @@ python scripts/run_live.py --refresh --execute
 
 ---
 
-## 5. Algorithmic Formulations (Quick Reference)
+## 5. Legacy Prototype Formulations (Quick Reference)
+
+The study memory's formulas are in the report, Chapter 3 (`paper/uiu_template/3.design.tex`).
 
 ### Retrieval Scoring in `OursMemory`
 $$\text{Score}(E) = \left(r_{\text{source}}(E) + \frac{|\text{Topics}(E) \cap \text{Topics}(Q)|}{\max(|\text{Topics}(Q)|, 1)} + \text{Bonus}_{\text{peer}} + 0.05 \cdot \text{Sentiment}(E), \quad t_E\right)$$

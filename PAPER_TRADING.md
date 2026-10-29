@@ -127,7 +127,10 @@ Launch the interactive dashboard to inspect order books, reconciled positions, a
 ./run_dashboard.sh
 # or: agentic-dashboard --port 8050
 ```
-Navigate to the **💼 Alpaca Paper** tab in `http://localhost:8050` to inspect target signals (`decisions.csv`) and live order execution events (`orders.jsonl`).
+Open the **Portfolio** page in `http://localhost:8050` to inspect positions and order events (`orders.jsonl`).
+Autonomous trading from the app runs through the **AI Autopilot** page: every order passes one server-side
+guardrail (cash reserve, per-stock and per-order caps, daily-loss and drawdown limits, trades per day) and the
+selected permission mode, with an approval queue and an emergency stop (`src/agentic_trade/autopilot.py`).
 
 ## Live-Money Opt-In (Not Recommended for Experiments)
 
