@@ -26,3 +26,6 @@ paper/uiu_template/*.lot
 
 # API keys saved from the Settings tab
 artifacts/credentials.json
+
+# FYDP report and research notes stay private (public repo)
+paper/

@@ -43,7 +43,8 @@ Headline (rolling protocol, `artifacts/study/rolling/`):
   of every news-memory signal is ≈ 0, buy-and-hold and price-only LightGBM do better in this period, and about
   47 years of daily data would be needed to confirm the observed edge.
 
-Full notes: [`paper/RESEARCH_LOG.md`](paper/RESEARCH_LOG.md). Report: [`paper/uiu_template/`](paper/uiu_template/README.md).
+The FYDP report and the research notes are kept outside this public repository; the scripts below write the
+report's tables and figures to a local `paper/` folder (git-ignored).
 
 ### Reproduce
 
@@ -123,8 +124,6 @@ See [`PAPER_TRADING.md`](PAPER_TRADING.md) for the execution adapter.
 
 ## 5. Documentation
 
-- [`paper/uiu_template/`](paper/uiu_template/README.md): the FYDP report (LaTeX, UIU template).
-- [`paper/RESEARCH_LOG.md`](paper/RESEARCH_LOG.md): running record of decisions, problems and results.
 - [`AGENT.md`](AGENT.md): repository layout and invariants for AI agents and contributors.
 - [`PAPER_TRADING.md`](PAPER_TRADING.md): paper-trading adapter and live-money opt-in.
-- [`RESEARCH_PAPER.md`](RESEARCH_PAPER.md), [`paper/EXPERIMENT_STATUS.md`](paper/EXPERIMENT_STATUS.md): prototype-era drafts, superseded.
+- [`RESEARCH_PAPER.md`](RESEARCH_PAPER.md): prototype-era draft, superseded.

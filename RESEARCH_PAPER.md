@@ -1,6 +1,6 @@
 > **Superseded.** This is the draft written for the early five-week prototype (June–July 2026 snapshot, four novelties).
-> The final work — one-year study, seven components N1–N7, rolling walk-forward evaluation — is the FYDP report in
-> [`paper/uiu_template/`](paper/uiu_template/README.md), with notes in [`paper/RESEARCH_LOG.md`](paper/RESEARCH_LOG.md).
+> The final work — one-year study, seven components N1–N7, rolling walk-forward evaluation — is summarised in
+> [`README.md`](README.md); the FYDP report itself is not part of this public repository.
 
 # Agentic Trade: Beyond Layered Decay in Financial LLM Agents — Provenance, Contradiction Retirement, and Episodic Decision Recall
 

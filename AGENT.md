@@ -26,8 +26,8 @@ Buy/Sell/Hold decisions. We re-implement it faithfully in `study/memory.py` (`fi
 | | N7 outcome-aware episodic recall | 10 most similar past contexts (>= 5 needed); abstain when their signed edge < 0 |
 | Act | policies and guardrails | threshold rule, LogReg/LightGBM, LLM backbones; the app's autopilot guardrail |
 
-Results, limitations and every design decision are in `paper/RESEARCH_LOG.md` and the report
-(`paper/uiu_template/`). Headline: best memory design on Sharpe and drawdown, not statistically significant.
+Results, limitations and design decisions are in the FYDP report and research log, which are kept in a local,
+git-ignored `paper/` folder. Headline: best memory design on Sharpe and drawdown, not statistically significant.
 
 ---
 
@@ -63,7 +63,7 @@ Results, limitations and every design decision are in `paper/RESEARCH_LOG.md` an
 ├── data/study/                <- one-year dataset (news, filings, bars, annotations)
 ├── artifacts/study/           <- study outputs (signals, evidence, rolling/, fixed/, llm/)
 ├── tests/                     <- 93 tests (study, autopilot, analytics, algorithms, credentials, legacy)
-└── paper/                     <- report (uiu_template/), figures/, RESEARCH_LOG.md
+└── paper/                     <- local only (git-ignored): report, figures, tables, research log
 ```
 
 ---
@@ -183,7 +183,7 @@ python scripts/run_live.py --refresh --execute
 
 ## 5. Legacy Prototype Formulations (Quick Reference)
 
-The study memory's formulas are in the report, Chapter 3 (`paper/uiu_template/3.design.tex`).
+The study memory's formulas are in `src/agentic_trade/study/memory.py` and the report's Chapter 3.
 
 ### Retrieval Scoring in `OursMemory`
 $$\text{Score}(E) = \left(r_{\text{source}}(E) + \frac{|\text{Topics}(E) \cap \text{Topics}(Q)|}{\max(|\text{Topics}(Q)|, 1)} + \text{Bonus}_{\text{peer}} + 0.05 \cdot \text{Sentiment}(E), \quad t_E\right)$$
