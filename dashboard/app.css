@@ -299,12 +299,13 @@ table.tbl, .ra-table { width: 100%; border-collapse: collapse; font-size: 0.85re
 
 /* ------------------------------------------------------------------ home */
 .hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.25rem; }
-.hero-card { background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--c4) 80%, var(--primary))); color: #fff; border: 0; }
-.hero-card .card-subtitle, .hero-card .muted, .hero-card .dim { color: rgba(255, 255, 255, 0.92); }
+.hero-card { background: linear-gradient(135deg, #13213f, #1d3c86); color: #ffffff; border: 0; }
+.hero-card .card-subtitle, .hero-card .muted, .hero-card .dim { color: #d6e0f5; }
 .hero-value { font-size: 2.3rem; font-weight: 850; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.hero-card .stat { background: rgba(255, 255, 255, 0.14); }
-.hero-card .stat .k, .hero-card .stat .s { color: rgba(255, 255, 255, 0.92); }
-.hero-card .pos { color: #d4ffea; } .hero-card .neg { color: #ffe0e0; }
+.hero-card .stat { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); }
+.hero-card .stat .k, .hero-card .stat .s { color: #c9d5ee; }
+.hero-card .stat .v { color: #ffffff; }
+.hero-card .pos { color: #7ee2b0; } .hero-card .neg { color: #ffb4b4; }
 .steps { display: flex; flex-direction: column; gap: 0.5rem; }
 .step { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.75rem; border-radius: 10px; background: var(--surface-2); }
 .step .n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 0.8rem;
@@ -487,3 +488,6 @@ table.tbl, .ra-table { width: 100%; border-collapse: collapse; font-size: 0.85re
 }
 #panel-split .an-alloc { flex-direction: column; align-items: stretch; }
 #panel-split .an-donut-wrap { align-self: center; }
+
+/* report screenshots (?capture=1): show the whole Q-table and replay instead of a scroll box */
+html.capture .table-container:has(#qrl-qtable), html.capture .table-container:has(#qrl-replay) { max-height: none !important; overflow: visible !important; }

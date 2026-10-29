@@ -176,6 +176,8 @@ const App = (() => {
     if (q.get('lang')) state.lang = q.get('lang') === 'bn' ? 'bn' : 'en';
     if (q.get('theme')) state.theme = q.get('theme');
     if (q.get('ticker')) { state.ticker = q.get('ticker').toUpperCase(); store.set('ticker', state.ticker); }
+    // ?capture=1 (report screenshots) opens the scroll boxes of the Q-learning card to their full height.
+    if (q.get('capture')) document.documentElement.classList.add('capture');
     setTheme(state.theme);
     setLang(state.lang);
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (state.theme === 'system') setTheme('system'); });

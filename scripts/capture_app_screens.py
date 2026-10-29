@@ -31,7 +31,7 @@ SHOTS = [
     ("app_whatif", "lang=en&theme=light&panel=whatif", "insights", 1440, 1200),
     ("app_risk", "lang=en&theme=light&ticker=COIN&panel=risk", "insights", 1440, 1100),
     ("app_corr", "lang=en&theme=light&panel=corr", "insights", 1440, 900),
-    ("app_algorithms", "lang=en&theme=light&ticker=NVDA&panel=algo", "insights", 1440, 5200),
+    ("app_algorithms", "lang=en&theme=light&ticker=NVDA&panel=algo&capture=1", "insights", 1440, 6400),
     ("app_budget", "lang=en&theme=light", "settings", 1440, 1100),
     ("app_memory", "lang=en&theme=light&ticker=NVDA", "agent", 1440, 1500),
     ("app_scanner", "lang=en&theme=light", "scanner", 1440, 1000),

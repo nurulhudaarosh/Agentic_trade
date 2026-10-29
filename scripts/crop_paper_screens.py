@@ -18,6 +18,7 @@ FIGURES = Path(__file__).resolve().parents[1] / "paper" / "figures"
 SCALE = 2  # device pixel ratio of the captures; must match SCALE in capture_app_screens.py
 SIDEBAR_EDGE = 248  # first CSS-pixel column right of the sidebar border in 1440 px wide captures
 KEEP_SIDEBAR = {"app_home"}  # one page keeps the navigation to show the layout
+PARTS = {"app_rl": 3}  # cards whose natural breaks need more parts than the ratio rule gives
 # A part may be at most this tall relative to its width (printed width 17.5 cm, about 21 cm of height).
 MAX_RATIO = 1.2
 SHRINK_TOLERANCE = 1.04  # split when the page height would shrink the printed width by more than 4%
@@ -52,11 +53,15 @@ def _gap_runs(img: np.ndarray, min_len: int = 12) -> list[tuple[int, int]]:
 
 def _cut_points(img: np.ndarray, parts: int, scale: int = 1) -> list[int]:
     h = img.shape[0]
-    centres = [(lo + hi) // 2 for lo, hi in _gap_runs(img, 12 * scale)]
+    runs = _gap_runs(img, 12 * scale)
+    centres = [(lo + hi) // 2 for lo, hi in runs]
+    # gaps between sections (taller than the space between table rows) make the cleanest cuts
+    wide = [(lo + hi) // 2 for lo, hi in runs if hi - lo + 1 >= 18 * scale]
     cuts = []
     for k in range(1, parts):
         target = h * k / parts
-        near = [c for c in centres if abs(c - target) < 0.45 * h / parts]
+        near = [c for c in wide if abs(c - target) < 0.3 * h / parts]
+        near = near or [c for c in centres if abs(c - target) < 0.45 * h / parts]
         if not near:
             print(f"  warning: no blank gap near row {int(target)}, cutting through content")
             cuts.append(int(target))
@@ -73,6 +78,7 @@ def process(name: str) -> list[str]:
     arr = np.asarray(img)
     ratio = img.height / img.width
     parts = 1 if ratio <= MAX_RATIO * SHRINK_TOLERANCE else int(np.ceil(ratio / MAX_RATIO))
+    parts = PARTS.get(name, parts)
     for old in FIGURES.glob(f"{name}_paper*.png"):
         old.unlink()
     if parts == 1:
