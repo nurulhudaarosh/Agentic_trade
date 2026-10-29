@@ -223,7 +223,7 @@ def llm_table(path: Path) -> str:
         return r"\begin{table}[ht]\centering\caption{LLM backbone comparison (pending).}\label{tab:llm}\begin{tabular}{l}\hline Experiment still running.\\\hline\end{tabular}\end{table}" + "\n"
     frame = pd.read_parquet(path)
     frame["ret"] = frame["position"] * frame["next_return"]
-    lines = []
+    lines, counts = [], set()
     for bb in sorted(frame["backbone"].unique()):
         for sysname in ("No-Memory", "FinMem", "Ours"):
             g = frame[(frame["backbone"] == bb) & (frame["system"] == sysname)]
@@ -236,7 +236,8 @@ def llm_table(path: Path) -> str:
             mix = "/".join(f"{100 * (g['action'] == a).mean():.0f}" for a in ("Buy", "Sell", "Hold"))
             eq = (1 + port).cumprod()
             mdd = float((eq / eq.cummax() - 1).min())
-            lines.append(f"{bb} & {sysname} & {f(cr, True)} & {f(sharpe)} & {f(mdd, True)} & {mix} & {len(g)}" + r" \\")
+            counts.add(len(g))
+            lines.append(f"{bb} & {sysname} & {f(cr, True)} & {f(sharpe)} & {f(mdd, True)} & {mix}" + r" \\")
         lines.append(r"\hline")
     from scipy.stats import wilcoxon
 
@@ -247,16 +248,18 @@ def llm_table(path: Path) -> str:
         tests.append(f"Ours vs {other}: {1e4 * (piv['Ours'] - piv[other]).mean():+.1f} bps/day, Wilcoxon $p={res.pvalue:.3f}$")
     bh = frame[(frame["backbone"] == frame["backbone"].iloc[0]) & (frame["system"] == "FinMem")].groupby("date")["next_return"].mean()
     bh_cr = (1 + bh).prod() - 1
-    lines.append(r"\multicolumn{7}{l}{Pooled over backbones: " + "; ".join(tests) + r".} \\")
-    lines.append(r"\multicolumn{7}{l}{Buy \& Hold over the same window: CR " + f(bh_cr, True) + r"\%.} \\")
+    note = r"\multicolumn{6}{p{0.9\textwidth}}{\footnotesize "
+    lines.append(note + "Pooled over backbones: " + "; ".join(tests) + r".} \\")
+    lines.append(note + r"Buy \& Hold over the same window: CR " + f(bh_cr, True) + r"\%.} \\")
+    per_row = f", {counts.pop()} decisions per row" if len(counts) == 1 else ""
     return rf"""\begin{{table}}[ht]
 \centering
-\caption{{LLM backbones deciding from the same retrieved memory (FinMem-style prompt, temperature 0, single trial), FinMem's five stocks, last 50 test sessions.}}
+\caption{{LLM backbones deciding from the same retrieved memory (FinMem-style prompt, temperature 0, single trial), FinMem's five stocks, last 50 test sessions{per_row}.}}
 \label{{tab:llm}}
 \small
-\begin{{tabular}}{{llrrrcr}}
+\begin{{tabular}}{{llrrrc}}
 \hline
-Backbone & Memory & CR (\%) & Sharpe & MDD (\%) & Buy/Sell/Hold (\%) & Decisions \\
+Backbone & Memory & CR (\%) & Sharpe & MDD (\%) & Buy/Sell/Hold (\%) \\
 \hline
 {chr(10).join(lines)}
 \hline

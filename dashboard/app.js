@@ -1,4 +1,4 @@
-/* Research-grounded agent application: Memory Agent, Scanner and Research Lab tabs. */
+/* Research-grounded agent pages: AI memory (Memory Agent), Stock scanner and Research lab. */
 const ResearchApp = (() => {
   const SERIES_COLORS = {
     'Ours': 'var(--s-ours)', 'FinMem': 'var(--s-finmem)', 'Plain RAG': 'var(--s-plain)',
@@ -19,9 +19,10 @@ const ResearchApp = (() => {
   const num = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? '–' : Number(v).toFixed(d);
   const snum = (v, d = 2) => (v === null || v === undefined) ? '–' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(d)}`;
   const signCls = (v) => v > 0 ? 'ra-pos' : v < 0 ? 'ra-neg' : '';
-  const badge = (a) => `<span class="ra-badge ${String(a || 'hold').toLowerCase()}">${esc(a || 'Hold')}</span>`;
+  const badge = (a) => `<span class="ra-badge ${String(a || 'hold').toLowerCase()}">${esc(App.action(a))}</span>`;
   const color = (name) => SERIES_COLORS[name] || 'var(--s-other)';
-  const toast = (m, err) => (typeof showToast === 'function' ? showToast(m, err) : console.log(m));
+  const toast = (m, err) => App.toast(m, err);
+  const t = App.t;
 
   async function api(path, body) {
     const res = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
@@ -33,12 +34,8 @@ const ResearchApp = (() => {
   async function ensureStatus(force = false) {
     if (state.status && !force) return state.status;
     state.status = await api('/api/agent/status');
-    const sel = $('ag-ticker');
-    if (sel && !sel.options.length) {
-      sel.innerHTML = state.status.tickers.map((t) => `<option value="${t}">${t}${state.status.finmem_tickers.includes(t) ? ' ·FinMem' : ''}</option>`).join('');
-      if (typeof currentTicker !== 'undefined' && state.status.tickers.includes(currentTicker)) sel.value = currentTicker;
-      $('ag-backbone').innerHTML = state.status.backbones.map((b) => `<option>${b}</option>`).join('');
-    }
+    const sel = $('ag-backbone');
+    if (sel && !sel.options.length) sel.innerHTML = state.status.backbones.map((b) => `<option>${b}</option>`).join('');
     renderStatus();
     return state.status;
   }
@@ -46,7 +43,7 @@ const ResearchApp = (() => {
   function renderStatus() {
     const s = state.status;
     if (!s) return;
-    $('ag-status').textContent = `${s.source} · decisions through ${s.latest_decision_date} · prices to ${s.last_price_date}`;
+    $('ag-status').textContent = t('ag.status', { d: s.latest_decision_date, p: s.last_price_date });
     const job = s.job || {};
     const box = $('ag-job');
     if (job.running || (job.log && job.log.length)) {
@@ -55,7 +52,7 @@ const ResearchApp = (() => {
       box.scrollTop = box.scrollHeight;
     }
     $('ag-refresh').disabled = !!job.running;
-    $('ag-refresh').textContent = job.running ? '⟳ Refreshing…' : '⟳ Refresh market data';
+    $('ag-refresh').textContent = job.running ? `⟳ ${t('ag.refreshing')}` : `⟳ ${t('ag.refresh')}`;
   }
 
   // ------------------------------------------------------------- SVG helpers
@@ -147,8 +144,7 @@ const ResearchApp = (() => {
   async function loadAgent() {
     try {
       await ensureStatus();
-      const t = $('ag-ticker').value || 'TSLA';
-      state.brief = await api(`/api/agent/brief?ticker=${t}`);
+      state.brief = await api(`/api/agent/brief?ticker=${App.ticker}`);
       state.llm = null;
       renderBrief();
     } catch (err) { toast(`Agent: ${err.message}`, true); }
@@ -158,12 +154,12 @@ const ResearchApp = (() => {
     const b = state.brief, o = b.systems.Ours || {}, c = b.consensus;
     const ep = b.episodic || {}, peer = b.peer || {};
     const tiles = [
-      ['Close · ' + b.date, `$${num(b.price)}`, `<span class="${signCls(b.change_1d)}">${spct(b.change_1d, 2)}</span> today · ${spct(b.change_20d)} 20d`, ''],
-      ['Memory signal (Ours)', snum(o.signal), `threshold ±${num(o.threshold)} → ${o.abstain ? 'abstain' : o.action}`, 'purple'],
-      ['Consensus', `${badge(c.action)}`, `confidence ${pct(c.confidence, 0)}${c.agreement ? ' · models agree' : ''}`, 'green'],
-      ['Price model P(up)', b.price_model.p_up == null ? '–' : num(b.price_model.p_up), 'LightGBM, price features only', 'orange'],
-      ['Episodic recall (N7)', ep.edge == null ? '–' : spct(ep.edge, 2), ep.n ? `${ep.n} similar past contexts` : 'not enough history', ''],
-      ['Peer evidence (N6)', peer.n ? snum(peer.signal) : '–', peer.n ? `${peer.n} co-mentioned-firm articles` : 'none today', ''],
+      [`${b.ticker} · ${b.date}`, `$${num(b.price)}`, `<span class="${signCls(b.change_1d)}">${spct(b.change_1d, 2)}</span> ${t('home.1d')} · ${spct(b.change_20d)} 20d`, 'blue'],
+      [t('ag.k.signal'), snum(o.signal), t('ag.k.signal.sub', { th: num(o.threshold), a: o.abstain ? t('ag.abstain') : App.action(o.action) }), 'purple'],
+      [t('ag.k.consensus'), `${badge(c.action)}`, `${t('home.conf')} ${pct(c.confidence, 0)}${c.agreement ? ` · ${t('ag.agree')}` : ''}`, 'green'],
+      [t('home.pup'), b.price_model.p_up == null ? '–' : num(b.price_model.p_up), t('ag.k.pup.sub'), 'orange'],
+      [t('ag.k.episodic'), ep.edge == null ? '–' : spct(ep.edge, 2), ep.n ? t('ag.k.episodic.sub', { n: ep.n }) : t('ag.k.episodic.none'), ''],
+      [t('ag.k.peer'), peer.n ? snum(peer.signal) : '–', peer.n ? t('ag.k.peer.sub', { n: peer.n }) : t('ag.k.peer.none'), ''],
     ];
     $('ag-kpis').innerHTML = tiles.map(([t, v, s, cls]) =>
       `<div class="kpi-card ${cls}"><div class="kpi-title">${esc(t)}</div><div class="kpi-val">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
@@ -187,8 +183,7 @@ const ResearchApp = (() => {
   function renderMemories() {
     const b = state.brief;
     const cited = new Set((state.llm && state.llm.decision && state.llm.decision.cited_ids) || []);
-    const groups = [['news', 'Shallow · news (Q = 14 d)'], ['10-Q', 'Intermediate · 10-Q + promoted memories (Q = 90 d)'],
-      ['10-K', 'Deep · 10-K + promoted memories (Q = 365 d)']];
+    const groups = [['news', t('ag.layer.news')], ['10-Q', t('ag.layer.10q')], ['10-K', t('ag.layer.10k')]];
     $('ag-memories').innerHTML = groups.map(([layer, title]) => {
       const items = b.memories.filter((m) => m.layer === layer);
       if (!items.length) return '';
@@ -198,15 +193,15 @@ const ResearchApp = (() => {
         return `<div class="ra-mem ${cited.has(String(m.id)) ? 'cited' : ''}">
           <div class="ra-mem-text">${text}</div>
           <div class="ra-mem-meta">
-            <span>${esc(m.date)} · ${m.age_days}d ago</span>
-            <span class="ra-meter">polarity ${meter(s, s >= 0 ? 'var(--pos)' : 'var(--neg)', true)} <span class="${signCls(s)}">${snum(s)}</span></span>
-            <span class="ra-meter">credibility ${meter(m.credibility, 'var(--s-ours)')} ${num(m.credibility)}</span>
-            ${m.corroboration > 1 ? `<span>×${Math.round(m.corroboration)} reports</span>` : ''}
+            <span>${esc(m.date)} · ${t('ag.ago', { n: m.age_days })}</span>
+            <span class="ra-meter">${t('ag.tone')} ${meter(s, s >= 0 ? 'var(--pos)' : 'var(--neg)', true)} <span class="${signCls(s)}">${snum(s)}</span></span>
+            <span class="ra-meter">${t('ag.cred')} ${meter(m.credibility, 'var(--s-ours)')} ${num(m.credibility)}</span>
+            ${m.corroboration > 1 ? `<span>×${Math.round(m.corroboration)} ${t('ag.reports')}</span>` : ''}
             <span>${esc(m.category)}${m.author && m.author !== 'sec' ? ' · ' + esc(m.author) : ''}</span>
             <span>id ${esc(m.id)}</span>
           </div></div>`;
       }).join('');
-    }).join('') || '<div class="ra-muted">No memories retrieved for this day.</div>';
+    }).join('') || `<div class="ra-muted">${t('ag.nomem')}</div>`;
   }
 
   function renderSystems() {
@@ -215,12 +210,12 @@ const ResearchApp = (() => {
       const s = sys[n];
       return `<tr class="${n === 'Ours' ? 'ra-focus' : ''}"><td><i class="ra-dot" style="background:${color(n)}"></i> ${n}</td>
         <td class="num ${signCls(s.signal)}">${snum(s.signal)}</td><td class="num">±${num(s.threshold)}</td>
-        <td>${badge(s.abstain ? 'Hold' : s.action)}${s.abstain ? ' <span class="ra-muted">abstain</span>' : ''}</td>
+        <td>${badge(s.abstain ? 'Hold' : s.action)}${s.abstain ? ` <span class="ra-muted">${t('ag.abstain')}</span>` : ''}</td>
         <td class="num">${s.layers.join(' / ')}</td><td class="num">${num(s.mean_age, 0)}d</td>
         <td class="num">${num(s.redundancy)}</td><td class="num">${num(s.conflict)}</td></tr>`;
     }).join('');
-    $('ag-systems').innerHTML = `<thead><tr><th>System</th><th class="num">Signal</th><th class="num">Thr.</th><th>Action</th>
-      <th class="num">news/10-Q/10-K</th><th class="num">Age</th><th class="num">Redund.</th><th class="num">Conflict</th></tr></thead><tbody>${rows}</tbody>`;
+    $('ag-systems').innerHTML = `<thead><tr><th>${t('ag.th.system')}</th><th class="num">${t('ag.th.signal')}</th><th class="num">${t('ag.th.thr')}</th><th>${t('col.action')}</th>
+      <th class="num">news/10-Q/10-K</th><th class="num">${t('ag.th.age')}</th><th class="num">${t('ag.th.redund')}</th><th class="num">${t('ag.th.conflict')}</th></tr></thead><tbody>${rows}</tbody>`;
   }
 
   function renderHistory() {
@@ -243,7 +238,7 @@ const ResearchApp = (() => {
       const y0 = Math.min(y(0), y(v)), hh = Math.max(1, Math.abs(y(v) - y(0)));
       out += `<rect x="${x(i) - bw / 2}" y="${y0}" width="${bw}" height="${hh}" rx="1.5" fill="${v >= 0 ? 'var(--pos)' : 'var(--neg)'}" opacity="0.85"><title>${h.date[i]}: ${snum(v)}</title></rect>`;
     });
-    out += `<text x="${m.l}" y="${H - 2}">memory signal (Ours) · dashed = decision threshold</text>`;
+    out += `<text x="${m.l}" y="${H - 2}">${t('ag.sigchart')}</text>`;
     sigBox.innerHTML = out + '</svg>';
   }
 
@@ -254,49 +249,49 @@ const ResearchApp = (() => {
     box.hidden = false;
     const ok = String(d.status || '').startsWith('ok');
     box.innerHTML = `
-      <div class="ra-row"><b>LLM agent</b> ${badge(d.action)} <span class="ra-muted">${esc(state.llm.model)} · ${esc(state.llm.provider)} · ${num(state.llm.latency_s, 1)}s · confidence ${num(d.confidence)}</span></div>
-      ${ok ? `<div>${esc(d.reasoning)}</div>` : `<div class="ra-neg">LLM unavailable (${esc(d.status)}). The consensus recommendation above still applies.</div>`}
-      ${(d.cited_ids || []).length ? `<div class="ra-muted">cited memories: ${d.cited_ids.map(esc).join(', ')} (highlighted)</div>` : ''}
+      <div class="ra-row"><b>${t('ag.llm')}</b> ${badge(d.action)} <span class="ra-muted">${esc(state.llm.model)} · ${esc(state.llm.provider)} · ${num(state.llm.latency_s, 1)}s · ${t('home.conf')} ${num(d.confidence)}</span></div>
+      ${ok ? `<div>${esc(d.reasoning)}</div>` : `<div class="ra-neg">${t('ag.llm.down', { s: esc(d.status) })}</div>`}
+      ${(d.cited_ids || []).length ? `<div class="ra-muted">${t('ag.cited')}: ${d.cited_ids.map(esc).join(', ')}</div>` : ''}
       <div class="ra-row">
-        <button class="btn btn-success" onclick="ResearchApp.execute('${esc(d.action)}', 'llm')">Approve LLM decision → paper</button>
-        <button class="btn btn-secondary" onclick="ResearchApp.execute('${esc(state.brief.consensus.action)}', 'consensus')">Use consensus instead</button>
+        <button class="btn btn-success" onclick="ResearchApp.execute('${esc(d.action)}', 'llm')">${t('ag.approve.llm')}</button>
+        <button class="btn btn-secondary" onclick="ResearchApp.execute('${esc(state.brief.consensus.action)}', 'consensus')">${t('ag.use.cons')}</button>
       </div>
-      <details><summary>Prompt sent to the model</summary><pre>${esc(state.llm.prompt)}</pre></details>`;
+      <details><summary>${t('ag.prompt')}</summary><pre>${esc(state.llm.prompt)}</pre></details>`;
   }
 
   async function askLLM() {
     const btn = $('ag-ask');
-    btn.disabled = true; btn.textContent = '🧠 Thinking…';
+    btn.disabled = true; btn.textContent = `🧠 ${t('ag.thinking')}`;
     try {
-      state.llm = await api('/api/agent/llm', { ticker: $('ag-ticker').value, backbone: $('ag-backbone').value });
+      state.llm = await api('/api/agent/llm', { ticker: App.ticker, backbone: $('ag-backbone').value });
       state.brief = state.llm.brief;
       renderBrief();
     } catch (err) { toast(`LLM: ${err.message}`, true); }
-    finally { btn.disabled = false; btn.textContent = '🧠 Ask LLM agent'; }
+    finally { btn.disabled = false; btn.textContent = `🧠 ${t('ag.ask')}`; }
   }
 
   async function execute(action, source) {
     const b = state.brief;
-    if (action === 'Hold') { toast('Hold: position unchanged.'); return; }
-    if (!confirm(`${action} ${b.ticker} on the paper account (${source})?`)) return;
+    if (action === 'Hold') { toast(t('ag.hold')); return; }
+    if (!confirm(t('ag.exec.confirm', { a: App.action(action), tk: b.ticker }))) return;
     try {
       const reasoning = source === 'llm' && state.llm ? state.llm.decision.reasoning : b.consensus.reasons.join('; ');
       const res = await api('/api/agent/execute', { ticker: b.ticker, action, reasoning, price: b.price,
         provider: source === 'llm' ? state.llm.provider : 'agent', model: source === 'llm' ? state.llm.model : 'memory+price consensus' });
-      toast(res.result && res.result.error ? `Not executed: ${res.result.error}` : `${action} ${b.ticker} sent to paper portfolio.`, !!(res.result && res.result.error));
-      if (typeof fetchPortfolio === 'function') fetchPortfolio();
+      toast(res.result && res.result.error ? `${t('trade.blocked')}: ${res.result.error}` : t('trade.sent', { side: App.action(action), tk: b.ticker }), !!(res.result && res.result.error));
+      Trade.fetchPortfolio();
     } catch (err) { toast(`Order: ${err.message}`, true); }
   }
 
   async function runAgent() {
-    const t = $('ag-ticker').value;
-    if (!confirm(`Run the full agent on ${t} and route its decision to the paper portfolio?`)) return;
+    const tk = App.ticker;
+    if (!confirm(t('trade.ai.confirm', { tk }))) return;
     const btn = $('ag-run'); btn.disabled = true;
     try {
-      const res = await api('/api/agent/run', { ticker: t, backbone: $('ag-backbone').value });
-      toast(`${t}: ${res.action} via ${res.model}${res.order_error ? ' (' + res.order_error + ')' : ''}`, !!res.order_error);
+      const res = await api('/api/agent/run', { ticker: tk, backbone: $('ag-backbone').value });
+      toast(`${tk}: ${App.action(res.action)} · ${res.model}${res.order_error ? ' (' + res.order_error + ')' : ''}`, !!res.order_error);
       if (res.brief) { state.brief = res.brief; state.llm = null; renderBrief(); }
-      if (typeof fetchPortfolio === 'function') fetchPortfolio();
+      Trade.fetchPortfolio();
     } catch (err) { toast(`Agent: ${err.message}`, true); }
     finally { btn.disabled = false; }
   }
@@ -305,11 +300,11 @@ const ResearchApp = (() => {
     try {
       const r = await api('/api/agent/refresh', {});
       if (!r.started) { toast(r.reason, true); return; }
-      toast('Refreshing data: news, prices, SEC filings, then replaying memory…');
+      toast(t('ag.refresh.started'));
       clearInterval(state.jobTimer);
       state.jobTimer = setInterval(async () => {
         await ensureStatus(true);
-        if (!state.status.job.running) { clearInterval(state.jobTimer); toast(state.status.job.error ? 'Refresh failed' : 'Data refreshed', !!state.status.job.error); loadAgent(); }
+        if (!state.status.job.running) { clearInterval(state.jobTimer); toast(state.status.job.error ? t('ag.refresh.fail') : t('ag.refresh.done'), !!state.status.job.error); loadAgent(); }
       }, 3000);
       await ensureStatus(true);
     } catch (err) { toast(err.message, true); }
@@ -317,35 +312,35 @@ const ResearchApp = (() => {
 
   // ------------------------------------------------------------------ Scanner
   async function loadScanner() {
-    $('sc-table').innerHTML = '<tbody><tr><td class="ra-muted">Scanning ten stocks…</td></tr></tbody>';
+    $('sc-table').innerHTML = `<tbody><tr><td class="ra-muted">${t('sc.scanning')}</td></tr></tbody>`;
     try {
       const data = await api('/api/agent/scan');
       state.scan = data.rows;
-      $('sc-date').textContent = data.rows.length ? `decision date ${data.rows[0].date}` : '';
+      $('sc-date').textContent = data.rows.length ? t('sc.date', { d: data.rows[0].date }) : '';
       const lim = Math.max(0.3, ...data.rows.map((r) => Math.abs(r.ours_signal || 0)));
-      $('sc-table').innerHTML = `<thead><tr><th>Ticker</th><th class="num">Close</th><th class="num">1d</th><th class="num">20d</th>
-        <th>Memory signal (Ours)</th><th>Ours</th><th>FinMem</th><th class="num">P(up)</th><th>Consensus</th><th class="num">Conf.</th>
-        <th class="num">News today</th><th>Top memory</th></tr></thead><tbody>` + data.rows.map((r) => {
+      $('sc-table').innerHTML = `<thead><tr><th>${t('col.stock')}</th><th class="num">${t('col.price')}</th><th class="num">1d</th><th class="num">20d</th>
+        <th>${t('ag.k.signal')}</th><th>Ours</th><th>FinMem</th><th class="num">P(up)</th><th>${t('sc.rec')}</th><th class="num">${t('home.conf')}</th>
+        <th class="num">${t('home.news')}</th><th>${t('sc.top')}</th></tr></thead><tbody>` + data.rows.map((r) => {
           const v = r.ours_signal || 0, w = Math.abs(v) / lim * 50;
           const bar = `<span class="ra-meter"><i style="width:90px"><b style="${v >= 0 ? `left:50%;width:${w}%` : `left:${50 - w}%;width:${w}%`};background:${v >= 0 ? 'var(--pos)' : 'var(--neg)'}"></b></i> <span class="${signCls(v)}">${snum(v)}</span></span>`;
           return `<tr onclick="ResearchApp.openTicker('${r.ticker}')"><td><b>${r.ticker}</b> <span class="ra-muted">${esc(r.company)}</span></td>
             <td class="num">$${num(r.price)}</td><td class="num ${signCls(r.change_1d)}">${spct(r.change_1d, 2)}</td><td class="num ${signCls(r.change_20d)}">${spct(r.change_20d)}</td>
-            <td>${bar}</td><td>${badge(r.abstain ? 'Hold' : r.ours_action)}${r.abstain ? ' <span class="ra-muted">abst.</span>' : ''}</td><td>${badge(r.finmem_action)}</td>
+            <td>${bar}</td><td>${badge(r.abstain ? 'Hold' : r.ours_action)}${r.abstain ? ` <span class="ra-muted">${t('ag.abstain')}</span>` : ''}</td><td>${badge(r.finmem_action)}</td>
             <td class="num">${num(r.p_up)}</td><td>${badge(r.consensus)}</td><td class="num">${pct(r.confidence, 0)}</td>
             <td class="num">${r.n_today}</td><td class="wrap">${esc(String(r.top_memory || "").slice(0, 110))}</td></tr>`;
         }).join('') + '</tbody>';
     } catch (err) { toast(`Scanner: ${err.message}`, true); }
   }
 
-  function openTicker(t) {
-    $('ag-ticker').value = t;
-    if (typeof switchTab === 'function') switchTab('agent');
+  function openTicker(tk) {
+    App.go('agent');
+    App.setTicker(tk);
   }
 
   async function executeAll() {
     const rows = (state.scan || []).filter((r) => r.consensus !== 'Hold');
-    if (!rows.length) { toast('All consensus actions are Hold: nothing to execute.'); return; }
-    if (!confirm(`Send ${rows.length} paper orders: ${rows.map((r) => `${r.consensus} ${r.ticker}`).join(', ')}?`)) return;
+    if (!rows.length) { toast(t('sc.allhold')); return; }
+    if (!confirm(t('sc.exec.confirm', { n: rows.length, list: rows.map((r) => `${App.action(r.consensus)} ${r.ticker}`).join(', ') }))) return;
     let ok = 0;
     for (const r of rows) {
       try {
@@ -353,8 +348,8 @@ const ResearchApp = (() => {
         if (res.result && !res.result.error) ok += 1;
       } catch (err) { /* reported below */ }
     }
-    toast(`${ok}/${rows.length} paper orders accepted.`);
-    if (typeof fetchPortfolio === 'function') fetchPortfolio();
+    toast(t('sc.exec.done', { ok, n: rows.length }));
+    Trade.fetchPortfolio();
   }
 
   // ------------------------------------------------------------- Research Lab
@@ -374,21 +369,21 @@ const ResearchApp = (() => {
     try {
       if (!state.research[state.protocol]) state.research[state.protocol] = await api(`/api/research?protocol=${state.protocol}`);
       const r = state.research[state.protocol];
-      if (!r.available) { $('rl-kpis').innerHTML = '<div class="ra-muted">Run scripts/run_study.py to generate results.</div>'; return; }
+      if (!r.available) { $('rl-kpis').innerHTML = `<div class="ra-muted">${t('rl.none')}</div>`; return; }
       renderResearch(r);
     } catch (err) { toast(`Research: ${err.message}`, true); }
   }
 
   function renderResearch(r) {
     const P = state.scope === 'all' ? r.portfolio : r.finmem5;
-    $('rl-range').textContent = `test ${r.test_range[0]} → ${r.test_range[1]} · ${r.test_days} sessions`;
-    const o = P.Ours || {}, f = P.FinMem || {}, bh = P['Buy & Hold'] || {}, t = r.tests.FinMem || {};
+    $('rl-range').textContent = t('rl.range', { a: r.test_range[0], b: r.test_range[1], n: r.test_days });
+    const o = P.Ours || {}, f = P.FinMem || {}, bh = P['Buy & Hold'] || {}, tf = r.tests.FinMem || {};
     const tiles = [
-      ['Ours Sharpe', num(o.sharpe), `FinMem ${num(f.sharpe)} · Buy&Hold ${num(bh.sharpe)}`, 'purple'],
-      ['Ours cumulative return', spct(o.cumulative_return), `FinMem ${spct(f.cumulative_return)}`, 'green'],
-      ['Ours max drawdown', pct(o.max_drawdown), `FinMem ${pct(f.max_drawdown)}`, 'red'],
-      ['ΔSharpe vs FinMem', snum(t.sharpe_diff), `95% CI [${num(t.ci_low)}, ${num(t.ci_high)}] · 10 stocks`, ''],
-      ['Wilcoxon vs FinMem', `p = ${num(t.wilcoxon_p, 3)}`, `${num(t.mean_diff_bps, 1)} bps/day · ${t.wilcoxon_p < 0.05 ? 'significant' : 'not significant'}`, 'orange'],
+      [t('rl.k.sharpe'), num(o.sharpe), `FinMem ${num(f.sharpe)} · Buy&Hold ${num(bh.sharpe)}`, 'purple'],
+      [t('rl.k.cr'), spct(o.cumulative_return), `FinMem ${spct(f.cumulative_return)}`, 'green'],
+      [t('rl.k.mdd'), pct(o.max_drawdown), `FinMem ${pct(f.max_drawdown)}`, 'red'],
+      [t('rl.k.dsharpe'), snum(tf.sharpe_diff), `95% CI [${num(tf.ci_low)}, ${num(tf.ci_high)}]`, ''],
+      [t('rl.k.wilcoxon'), `p = ${num(tf.wilcoxon_p, 3)}`, `${num(tf.mean_diff_bps, 1)} bps/day · ${tf.wilcoxon_p < 0.05 ? t('rl.sig') : t('rl.notsig')}`, 'orange'],
     ];
     $('rl-kpis').innerHTML = tiles.map(([a, v, s, cls]) =>
       `<div class="kpi-card ${cls}"><div class="kpi-title">${esc(a)}</div><div class="kpi-val">${v}</div><div class="kpi-sub">${esc(s)}</div></div>`).join('');
@@ -406,24 +401,40 @@ const ResearchApp = (() => {
 
     // main table
     const order = STRATEGY_ORDER.filter((n) => P[n]);
-    $('rl-table').innerHTML = `<thead><tr><th>Strategy</th><th class="num">CR</th><th class="num">Sharpe</th><th class="num">Sortino</th><th class="num">MDD</th><th class="num">Vol</th><th class="num">Turnover</th></tr></thead><tbody>` +
+    $('rl-table').innerHTML = `<thead><tr><th>${t('rl.strategy')}</th><th class="num">CR</th><th class="num">Sharpe</th><th class="num">Sortino</th><th class="num">MDD</th><th class="num">Vol</th><th class="num">Turnover</th></tr></thead><tbody>` +
       order.map((n) => { const m = P[n]; return `<tr class="${n === 'Ours' ? 'ra-focus' : ''}"><td><i class="ra-dot" style="background:${color(n)}"></i> ${esc(n)}</td>
         <td class="num ${signCls(m.cumulative_return)}">${spct(m.cumulative_return)}</td><td class="num">${num(m.sharpe)}</td><td class="num">${num(m.sortino)}</td>
         <td class="num">${pct(m.max_drawdown)}</td><td class="num">${pct(m.annualized_volatility)}</td><td class="num">${num(m.turnover)}</td></tr>`; }).join('') + '</tbody>';
 
     // tests
     const tests = Object.entries(r.tests).sort((a, b) => (a[1].wilcoxon_p ?? 1) - (b[1].wilcoxon_p ?? 1));
-    $('rl-tests').innerHTML = `<thead><tr><th>Baseline</th><th class="num">Δ bps/day</th><th class="num">ΔSharpe [95% CI]</th><th class="num">Wilcoxon p</th><th class="num">Holm p</th></tr></thead><tbody>` +
+    $('rl-tests').innerHTML = `<thead><tr><th>${t('rl.baseline')}</th><th class="num">Δ bps/day</th><th class="num">ΔSharpe [95% CI]</th><th class="num">Wilcoxon p</th><th class="num">Holm p</th></tr></thead><tbody>` +
       tests.map(([n, v]) => `<tr><td>${esc(n)}</td><td class="num ${signCls(v.mean_diff_bps)}">${snum(v.mean_diff_bps, 1)}</td>
         <td class="num">${snum(v.sharpe_diff)} [${num(v.ci_low)}, ${num(v.ci_high)}]</td><td class="num">${num(v.wilcoxon_p, 3)}</td>
         <td class="num">${v.wilcoxon_p_holm < 0.05 ? '<b>' + num(v.wilcoxon_p_holm, 3) + '</b>' : num(v.wilcoxon_p_holm, 3)}</td></tr>`).join('') + '</tbody>';
 
     // heatmap
     const tickers = Object.keys(r.per_ticker.Ours || {});
-    const heat = (v) => { const a = Math.max(-1, Math.min(1, v / 2.5)); return a >= 0 ? `rgba(57,135,229,${0.08 + a * 0.55})` : `rgba(230,103,103,${0.08 - a * 0.55})`; };
-    $('rl-heatmap').innerHTML = `<table class="ra-table ra-heat"><thead><tr><th>Strategy</th>${tickers.map((t) => `<th class="num">${t}</th>`).join('')}</tr></thead><tbody>` +
+    const heat = (v) => Charts.heat(v, 2.5);
+    $('rl-heatmap').innerHTML = `<table class="ra-table ra-heat"><thead><tr><th>${t('rl.strategy')}</th>${tickers.map((t) => `<th class="num">${t}</th>`).join('')}</tr></thead><tbody>` +
       order.map((n) => `<tr class="${n === 'Ours' ? 'ra-focus' : ''}"><td>${esc(n)}</td>${tickers.map((t) => { const v = (r.per_ticker[n] || {})[t]; const s = v ? v.sharpe : null;
         return `<td class="num" style="background:${s == null ? 'transparent' : heat(s)}">${num(s)}</td>`; }).join('')}</tr>`).join('') + '</tbody></table>';
+
+    // model zoo (extension experiments)
+    const z = r.extensions;
+    $('rl-zoo-card').hidden = !z;
+    if (z) {
+      const zooOrder = ['Buy & Hold', 'LGBM (price)', 'GRU (price)', 'Transformer (price)', 'Transformer (price+memory)', 'RL Q-learning',
+        'Pattern analogs (kNN)', 'Ours', 'FinMem', 'LGBM + memory risk overlay', 'Model vote (LGBM, Transformer, Ours)'].filter((n) => z.portfolio[n]);
+      const explore = (n) => n.startsWith('LGBM +') || n.startsWith('Model vote');
+      $('rl-zoo').innerHTML = `<thead><tr><th>${t('rl.strategy')}</th><th class="num">CR</th><th class="num">Sharpe</th><th class="num">MDD</th>
+        <th class="num">Beta</th><th class="num">Alpha/yr</th><th class="num">ΔSharpe vs Ours [95% CI]</th></tr></thead><tbody>` +
+        zooOrder.map((n) => { const m = z.portfolio[n], tt = z.tests[`${n} vs Ours`];
+          return `<tr class="${n === 'Ours' ? 'ra-focus' : ''}"><td>${esc(n)}${explore(n) ? ' *' : ''}</td><td class="num ${signCls(m.cumulative_return)}">${spct(m.cumulative_return)}</td>
+          <td class="num">${num(m.sharpe)}</td><td class="num">${pct(m.max_drawdown)}</td><td class="num">${num(m.beta)}</td>
+          <td class="num ${signCls(m.alpha_annual)}">${spct(m.alpha_annual)}</td>
+          <td class="num">${tt ? `${snum(tt.sharpe_diff)} [${num(tt.ci_low, 1)}, ${num(tt.ci_high, 1)}]` : '–'}</td></tr>`; }).join('') + '</tbody>';
+    }
 
     // IC
     const icRows = ['Plain RAG', 'FinMem', 'Ours', 'Ours (signed N1)'].filter((n) => r.ic[n]).map((n) => ({
@@ -438,13 +449,13 @@ const ResearchApp = (() => {
           `<tr class="${x.system === 'Ours' ? 'ra-focus' : ''}"><td>${esc(x.backbone)}</td><td>${esc(x.system)}</td><td class="num ${signCls(x.cumulative_return)}">${spct(x.cumulative_return)}</td>
           <td class="num">${num(x.sharpe)}</td><td class="num">${pct(x.buy, 0)} / ${pct(x.sell, 0)} / ${pct(x.hold, 0)}</td><td class="num">${x.n}</td></tr>`)).join('') + '</tbody>';
     } else {
-      $('rl-llm').innerHTML = '<tbody><tr><td class="ra-muted">LLM backbone experiment still running (scripts/run_llm_study.py).</td></tr></tbody>';
+      $('rl-llm').innerHTML = `<tbody><tr><td class="ra-muted">${t('rl.llm.none')}</td></tr></tbody>`;
     }
 
     // memory ops
     const ops = r.memory_stats;
     const opNames = ['items', 'merged', 'retired', 'promoted', 'purged'];
-    $('rl-ops').innerHTML = `<thead><tr><th>System</th>${opNames.map((k) => `<th class="num">${k}</th>`).join('')}</tr></thead><tbody>` +
+    $('rl-ops').innerHTML = `<thead><tr><th>${t('ag.th.system')}</th>${opNames.map((k) => `<th class="num">${k}</th>`).join('')}</tr></thead><tbody>` +
       ['Plain RAG', 'FinMem', 'Ours'].filter((n) => ops[n]).map((n) => `<tr class="${n === 'Ours' ? 'ra-focus' : ''}"><td>${n}</td>${opNames.map((k) => `<td class="num">${(ops[n][k] ?? 0).toLocaleString()}</td>`).join('')}</tr>`).join('') + '</tbody>';
 
     // credibility
@@ -455,12 +466,13 @@ const ResearchApp = (() => {
     // findings (computed from the numbers shown above)
     const ff = r.finmem5;
     const ic = r.ic;
+    const tF = r.tests.FinMem || {};
     $('rl-findings').innerHTML = [
-      `Among memory architectures, <b>Ours</b> has the highest Sharpe (${num(r.portfolio.Ours.sharpe)}) vs FinMem ${num(r.portfolio.FinMem.sharpe)} and Plain RAG ${num(r.portfolio['Plain RAG'].sharpe)} on ten stocks; on FinMem's own five stocks ${spct(ff.Ours.cumulative_return)} vs ${spct(ff.FinMem.cumulative_return)}.`,
-      `The gain over FinMem is <b>${(r.tests.FinMem || {}).wilcoxon_p < 0.05 ? 'statistically significant' : 'not statistically significant'}</b> (Wilcoxon p = ${num((r.tests.FinMem || {}).wilcoxon_p, 3)}; ΔSharpe CI [${num((r.tests.FinMem || {}).ci_low)}, ${num((r.tests.FinMem || {}).ci_high)}]).`,
-      `Next-day predictive content of every news-memory signal is close to zero (IC: Ours ${snum(ic.Ours.ic_pooled, 3)}, FinMem ${snum(ic.FinMem.ic_pooled, 3)}, Plain RAG ${snum(ic['Plain RAG'].ic_pooled, 3)}). Price-only LightGBM (${num(r.portfolio['LGBM (price)'].sharpe)}) and Buy & Hold (${num(r.portfolio['Buy & Hold'].sharpe)}) are stronger in this period, so the app treats memory as context and risk control, not as a stand-alone alpha source.`,
-      `Memory signals do beat reacting to the day's headlines without memory (Holm p = ${num((r.tests['Daily News Sentiment'] || {}).wilcoxon_p_holm, 3)}).`,
-    ].map((x) => `<li>${x}</li>`).join('');
+      t('rl.f1', { o: num(r.portfolio.Ours.sharpe), f: num(r.portfolio.FinMem.sharpe), p: num(r.portfolio['Plain RAG'].sharpe), o5: spct(ff.Ours.cumulative_return), f5: spct(ff.FinMem.cumulative_return) }),
+      t(tF.wilcoxon_p < 0.05 ? 'rl.f2.sig' : 'rl.f2.notsig', { p: num(tF.wilcoxon_p, 3), lo: num(tF.ci_low), hi: num(tF.ci_high) }),
+      t('rl.f3', { o: snum(ic.Ours.ic_pooled, 3), f: snum(ic.FinMem.ic_pooled, 3), p: snum(ic['Plain RAG'].ic_pooled, 3), l: num(r.portfolio['LGBM (price)'].sharpe), b: num(r.portfolio['Buy & Hold'].sharpe) }),
+      t('rl.f4', { p: num((r.tests['Daily News Sentiment'] || {}).wilcoxon_p_holm, 3) }),
+].map((x) => `<li>${x}</li>`).join('');
 
     // figures
     $('rl-figures').innerHTML = (r.figures || []).map((f) => `<figure data-f="${esc(f)}"><img loading="lazy" src="/figures/${esc(f)}.png" alt="${esc(f)}"><figcaption>${esc(f.replace(/^fig\d+_/, '').replace(/_/g, ' '))}</figcaption></figure>`).join('');
@@ -469,17 +481,19 @@ const ResearchApp = (() => {
     }));
   }
 
+  App.register('agent', loadAgent);
+  App.register('scanner', loadScanner);
+  App.register('research', loadResearch);
+  App.on('lang', () => {
+    const pg = App.state.page;
+    if (pg === 'agent' && state.brief) { renderStatus(); renderBrief(); }
+    if (pg === 'scanner') loadScanner();
+    if (pg === 'research' && state.research[state.protocol]) renderResearch(state.research[state.protocol]);
+  });
   window.addEventListener('resize', () => {
-    if (typeof currentTab === 'undefined') return;
-    if (currentTab === 'research' && state.research[state.protocol]) renderResearch(state.research[state.protocol]);
-    if (currentTab === 'agent' && state.brief) renderHistory();
+    if (App.state.page === 'research' && state.research[state.protocol]) renderResearch(state.research[state.protocol]);
+    if (App.state.page === 'agent' && state.brief) renderHistory();
   });
 
   return { loadAgent, askLLM, execute, runAgent, refreshData, loadScanner, openTicker, executeAll, loadResearch };
 })();
-
-// Deep links: /#agent, /#scanner, /#research open that tab directly.
-window.addEventListener('DOMContentLoaded', () => {
-  const tab = (location.hash || '').slice(1);
-  if (['agent', 'scanner', 'research'].includes(tab) && typeof switchTab === 'function') setTimeout(() => switchTab(tab), 50);
-});

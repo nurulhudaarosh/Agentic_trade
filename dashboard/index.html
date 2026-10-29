@@ -2,1735 +2,651 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agentic Trade • Cognitive Memory Research & Live AI Trading Terminal</title>
-  <style>
-    :root {
-      --bg: #080c14;
-      --card-bg: #0f1626;
-      --card-border: #1e293b;
-      --card-hover: #162035;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --accent: #3b82f6;
-      --accent-glow: rgba(59, 130, 246, 0.25);
-      --purple: #a855f7;
-      --cyan: #06b6d4;
-      --green: #10b981;
-      --green-bg: rgba(16, 185, 129, 0.15);
-      --red: #ef4444;
-      --red-bg: rgba(239, 68, 68, 0.15);
-      --yellow: #f59e0b;
-      --yellow-bg: rgba(245, 158, 11, 0.15);
-      --orange: #f97316;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-
-    /* Header */
-    header {
-      background: rgba(15, 22, 38, 0.95);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--card-border);
-      padding: 0.65rem 1.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      gap: 1rem;
-    }
-    .brand { display: flex; align-items: center; gap: 0.75rem; }
-    .brand-logo {
-      width: 36px; height: 36px; background: linear-gradient(135deg, #3b82f6, #a855f7);
-      border-radius: 9px; display: flex; align-items: center; justify-content: center;
-      font-weight: 900; font-size: 1.2rem; color: #fff; box-shadow: 0 0 16px var(--accent-glow);
-    }
-    .brand-title { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.5rem; }
-    .brand-badge {
-      font-size: 0.65rem; background: rgba(59, 130, 246, 0.2); color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.15rem 0.5rem; border-radius: 999px; text-transform: uppercase; font-weight: 700;
-    }
-    .engine-status-pill {
-      display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 600;
-      background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);
-      padding: 0.25rem 0.7rem; border-radius: 999px;
-    }
-    .pulse-dot { width: 7px; height: 7px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
-
-    .nav-tabs { display: flex; gap: 0.25rem; background: #080c14; padding: 0.25rem; border-radius: 10px; border: 1px solid var(--card-border); }
-    .tab-btn {
-      background: transparent; border: none; color: var(--text-muted); padding: 0.5rem 0.9rem;
-      font-size: 0.82rem; font-weight: 600; border-radius: 7px; cursor: pointer; transition: all 0.2s ease;
-      display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;
-    }
-    .tab-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
-    .tab-btn.active { color: #fff; background: #1e293b; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-
-    /* Ticker Ribbon */
-    .ticker-bar {
-      background: #0b111e; border-bottom: 1px solid var(--card-border); padding: 0.4rem 1.5rem;
-      display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem;
-    }
-    .ticker-pills { display: flex; align-items: center; gap: 0.5rem; overflow-x: auto; }
-    .ticker-pill {
-      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
-      padding: 0.35rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
-      transition: all 0.2s; font-weight: 600;
-    }
-    .ticker-pill:hover { border-color: var(--accent); background: var(--card-hover); }
-    .ticker-pill.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.15); box-shadow: 0 0 10px var(--accent-glow); }
-    .quote-price { font-weight: 700; color: #fff; }
-    .quote-change { font-size: 0.75rem; font-weight: 600; }
-    .quote-change.up { color: var(--green); }
-    .quote-change.down { color: var(--red); }
-
-    .risk-profile-selector { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
-    .profile-pill {
-      background: #111827; border: 1px solid var(--card-border); color: var(--text-muted);
-      padding: 0.3rem 0.65rem; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.75rem;
-      transition: all 0.2s;
-    }
-    .profile-pill:hover { color: #fff; }
-    .profile-pill.aggressive.active { background: rgba(239, 68, 68, 0.2); border-color: var(--red); color: #f87171; }
-    .profile-pill.standard.active { background: rgba(59, 130, 246, 0.2); border-color: var(--accent); color: #60a5fa; }
-    .profile-pill.conservative.active { background: rgba(16, 185, 129, 0.2); border-color: var(--green); color: #34d399; }
-
-    /* Main Container */
-    main { flex: 1; padding: 1.25rem 1.5rem; max-width: 1560px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 1.25rem; }
-    .tab-content { display: none; flex-direction: column; gap: 1.25rem; }
-    .tab-content.active { display: flex; }
-
-    /* Cards & Grids */
-    .card {
-      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
-      padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; position: relative;
-    }
-    .card-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.75rem; }
-    .card-title { font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.01em; }
-    .card-subtitle { font-size: 0.78rem; color: var(--text-dim); }
-
-    /* Toolbar Controls */
-    .toolbar {
-      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-      gap: 1rem; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 0.85rem 1.25rem;
-    }
-    .toolbar-group { display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; }
-    .control-label { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    select, input[type="text"], input[type="number"] {
-      background: #080c14; border: 1px solid var(--card-border); color: var(--text);
-      padding: 0.45rem 0.85rem; border-radius: 8px; font-size: 0.85rem; outline: none; transition: border-color 0.2s;
-    }
-    select:focus, input:focus { border-color: var(--accent); }
-    .btn {
-      background: var(--accent); color: white; border: none; padding: 0.45rem 1rem; border-radius: 8px;
-      font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;
-    }
-    .btn:hover { background: #2563eb; transform: translateY(-1px); }
-    .btn-secondary { background: #1e293b; color: var(--text); border: 1px solid var(--card-border); }
-    .btn-secondary:hover { background: #283548; }
-    .btn-success { background: #10b981; }
-    .btn-success:hover { background: #059669; }
-    .btn-danger { background: #ef4444; }
-    .btn-danger:hover { background: #dc2626; }
-    .btn-ai { background: linear-gradient(135deg, #8b5cf6, #3b82f6); box-shadow: 0 0 12px rgba(139, 92, 246, 0.35); }
-    .btn-ai:hover { opacity: 0.95; transform: scale(1.02); }
-
-    /* KPI Ribbon */
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
-    .kpi-card {
-      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
-      padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.35rem; position: relative; overflow: hidden;
-    }
-    .kpi-card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent); }
-    .kpi-card.purple::before { background: var(--purple); }
-    .kpi-card.green::before { background: var(--green); }
-    .kpi-card.orange::before { background: var(--orange); }
-    .kpi-card.red::before { background: var(--red); }
-    .kpi-title { font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--text-dim); letter-spacing: 0.05em; }
-    .kpi-val { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; }
-    .kpi-sub { font-size: 0.75rem; color: var(--text-dim); }
-
-    /* Live execution tape and quick trading tools */
-    .terminal-tools { display: grid; grid-template-columns: 1.35fr 1fr; gap: 1rem; }
-    .live-tape { display: flex; flex-direction: column; gap: 0.45rem; max-height: 232px; overflow-y: auto; }
-    .live-tape-row { display: grid; grid-template-columns: 74px 52px 1fr auto; align-items: center; gap: 0.55rem; padding: 0.55rem 0.65rem; background: #080c14; border: 1px solid rgba(255,255,255,0.06); border-radius: 7px; font-size: 0.76rem; }
-    .live-tape-row.latest { border-color: rgba(6,182,212,0.55); box-shadow: 0 0 14px rgba(6,182,212,0.12); }
-    .live-tape-time { color: var(--text-dim); font-size: 0.68rem; }
-    .live-tape-symbol { font-weight: 800; color: #fff; }
-    .live-tape-meta { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
-    .tool-button { min-height: 58px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0.15rem; text-align: left; }
-    .tool-button small { color: rgba(255,255,255,0.7); font-size: 0.68rem; font-weight: 500; }
-    .tape-empty { color: var(--text-dim); text-align: center; padding: 1.25rem 0.5rem; font-size: 0.78rem; }
-    @media (max-width: 760px) { .terminal-tools { grid-template-columns: 1fr; } .live-tape-row { grid-template-columns: 62px 48px 1fr auto; } }
-
-    /* Two-column Trading Layout */
-    .terminal-layout { display: grid; grid-template-columns: 2.2fr 1fr; gap: 1.25rem; }
-    @media (max-width: 1080px) { .terminal-layout { grid-template-columns: 1fr; } }
-
-    /* SVG Chart */
-    .chart-container { width: 100%; height: 420px; position: relative; }
-    .subchart-container { width: 100%; height: 130px; position: relative; margin-top: 0.5rem; }
-    svg.terminal-chart { width: 100%; height: 100%; overflow: visible; }
-    .chart-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.78rem; font-weight: 600; }
-    .legend-item { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
-    .legend-color { width: 10px; height: 10px; border-radius: 3px; }
-
-    /* Gauge & Signals Card */
-    .signal-gauge-box {
-      background: #080c14; border: 1px solid var(--card-border); border-radius: 10px; padding: 1.2rem;
-      display: flex; flex-direction: column; align-items: center; gap: 0.6rem; text-align: center;
-    }
-    .gauge-rec-badge {
-      font-size: 1.35rem; font-weight: 900; letter-spacing: 0.05em; padding: 0.4rem 1.4rem;
-      border-radius: 999px; text-transform: uppercase; box-shadow: 0 0 18px currentColor;
-    }
-    .signal-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; width: 100%; margin-top: 0.75rem; }
-    .signal-item {
-      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
-      padding: 0.6rem; font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.2rem;
-    }
-    .signal-item-name { color: var(--text-dim); font-weight: 700; text-transform: uppercase; font-size: 0.68rem; }
-    .signal-item-val { font-weight: 800; font-size: 0.95rem; }
-    .signal-item-desc { font-size: 0.7rem; color: var(--text-muted); }
-
-    /* Order Form */
-    .order-form { display: flex; flex-direction: column; gap: 0.85rem; }
-    .action-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .action-btn {
-      background: #111827; border: 1px solid var(--card-border); color: var(--text-muted);
-      padding: 0.65rem; font-weight: 800; font-size: 0.9rem; border-radius: 8px; cursor: pointer; text-align: center;
-      transition: all 0.2s;
-    }
-    .action-btn.buy.active { background: rgba(16, 185, 129, 0.2); border-color: var(--green); color: #34d399; box-shadow: 0 0 10px rgba(16, 185, 129, 0.25); }
-    .action-btn.sell.active { background: rgba(239, 68, 68, 0.2); border-color: var(--red); color: #f87171; box-shadow: 0 0 10px rgba(239, 68, 68, 0.25); }
-
-    .preset-pills { display: flex; gap: 0.35rem; }
-    .preset-pill {
-      flex: 1; background: #080c14; border: 1px solid var(--card-border); color: var(--text-muted);
-      padding: 0.3rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-align: center; cursor: pointer;
-    }
-    .preset-pill:hover { border-color: var(--accent); color: #fff; }
-
-    /* Tables */
-    .table-container { width: 100%; overflow-x: auto; border: 1px solid var(--card-border); border-radius: 10px; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.82rem; }
-    th { background: #080c14; color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.72rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--card-border); }
-    td { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
-    tr:hover td { background: rgba(255, 255, 255, 0.02); }
-
-    .badge {
-      display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.55rem;
-      border-radius: 999px; text-transform: uppercase;
-    }
-    .badge-buy { background: var(--green-bg); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-sell { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
-    .badge-hold { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
-    .badge-profit { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-weight: 800; }
-    .badge-loss { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-weight: 800; }
-    .pnl-pill {
-      display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.65rem;
-      border-radius: 6px; font-weight: 800; font-size: 0.8rem;
-    }
-    .pnl-pill.profit { background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
-    .pnl-pill.loss { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
-
-    /* AI Reasoning Box */
-    .ai-decision-card {
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.08));
-      border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 1rem 1.25rem;
-      display: flex; flex-direction: column; gap: 0.6rem;
-    }
-    .console-stream {
-      background: #05080f; border: 1px solid var(--card-border); border-radius: 10px; padding: 1rem;
-      font-family: "JetBrains Mono", Consolas, Monaco, monospace; font-size: 0.78rem; color: #a5b4fc;
-      max-height: 280px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap;
-    }
-
-    /* Modal */
-    .toast {
-      position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: #fff;
-      padding: 0.85rem 1.5rem; border-radius: 10px; border-left: 4px solid var(--accent);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5); font-size: 0.85rem; font-weight: 600;
-      display: none; align-items: center; gap: 0.6rem; z-index: 1000; animation: slideIn 0.3s ease;
-    }
-    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Agentic Trade</title>
+  <meta name="color-scheme" content="light dark">
+  <script>
+    // Apply the saved theme before first paint so the page never flashes the wrong colours.
+    try { const th = localStorage.getItem('theme'); if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
+      if (localStorage.getItem('lang') === 'bn') document.documentElement.lang = 'bn'; } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-
-  <!-- Top Navigation Header -->
-  <header>
+<div class="app">
+  <!-- ============================================================ sidebar -->
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
     <div class="brand">
-      <div class="brand-logo">A</div>
-      <div>
-        <div class="brand-title">
-          AGENTIC TRADE
-          <span class="brand-badge">HARNESS & TERMINAL</span>
-        </div>
-      </div>
-      <div class="engine-status-pill">
-        <span class="pulse-dot"></span>
-        <span id="execution-mode-pill">ALPACA PAPER EXECUTION</span>
-      </div>
+      <div class="brand-mark">A</div>
+      <div><div class="brand-name">Agentic Trade</div><div class="brand-sub" data-i18n="brand.sub">AI trading assistant</div></div>
     </div>
-
-    <nav class="nav-tabs">
-      <button class="tab-btn active" onclick="switchTab('terminal')">📊 Trading Terminal</button>
-      <button class="tab-btn" onclick="switchTab('agentic')">🤖 AI Agent Harness</button>
-      <button class="tab-btn" onclick="switchTab('portfolio')">💼 Positions & Portfolio</button>
-      <button class="tab-btn" onclick="switchTab('agent')">🧠 Memory Agent</button>
-      <button class="tab-btn" onclick="switchTab('scanner')">🛰️ Scanner</button>
-      <button class="tab-btn" onclick="switchTab('research')">🔬 Research Lab</button>
-      <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+    <nav class="nav-group">
+      <div class="nav-label" data-i18n="nav.group.main">Main</div>
+      <button class="nav-item" data-page="home" onclick="App.go('home')"><span class="ico">🏠</span><span data-i18n="nav.home">Home</span></button>
+      <button class="nav-item" data-page="trade" onclick="App.go('trade')"><span class="ico">📈</span><span data-i18n="nav.trade">Trade</span></button>
+      <button class="nav-item" data-page="portfolio" onclick="App.go('portfolio')"><span class="ico">💼</span><span data-i18n="nav.portfolio">Portfolio</span></button>
+      <button class="nav-item" data-page="autopilot" onclick="App.go('autopilot')"><span class="ico">🤖</span><span data-i18n="nav.autopilot">AI Autopilot</span><span class="nav-count" id="nav-pending" hidden>0</span></button>
+      <button class="nav-item" data-page="insights" onclick="App.go('insights')"><span class="ico">📊</span><span data-i18n="nav.insights">Insights</span></button>
     </nav>
-  </header>
-
-  <!-- Real-time Ticker & Strategy Bar -->
-  <div class="ticker-bar">
-    <div class="ticker-pills" id="ticker-pills-bar">
-      <!-- Populated dynamically: TSLA, AMZN, MSFT, NFLX, COIN -->
+    <nav class="nav-group">
+      <div class="nav-label" data-i18n="nav.group.research">Research</div>
+      <button class="nav-item" data-page="scanner" onclick="App.go('scanner')"><span class="ico">🛰️</span><span data-i18n="nav.scanner">Stock scanner</span></button>
+      <button class="nav-item" data-page="agent" onclick="App.go('agent')"><span class="ico">🧠</span><span data-i18n="nav.agent">AI memory</span></button>
+      <button class="nav-item" data-page="research" onclick="App.go('research')"><span class="ico">🔬</span><span data-i18n="nav.research">Research lab</span></button>
+    </nav>
+    <nav class="nav-group">
+      <button class="nav-item" data-page="settings" onclick="App.go('settings')"><span class="ico">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="mode-pill"><span class="dot" id="mode-dot"></span><span id="mode-text" data-i18n="mode.checking">Checking account…</span></div>
+      <div class="mode-pill"><span class="dot off" id="pilot-dot"></span><span id="pilot-text" data-i18n="pilot.off">Autopilot off</span></div>
     </div>
+  </aside>
 
-    <div class="risk-profile-selector">
-      <span class="control-label">Strategy Profile:</span>
-      <button class="profile-pill aggressive active" onclick="setRiskProfile('aggressive')">⚡ Aggressive</button>
-      <button class="profile-pill standard" onclick="setRiskProfile('standard')">⚖️ Standard</button>
-      <button class="profile-pill conservative" onclick="setRiskProfile('conservative')">🛡️ Conservative</button>
-    </div>
-  </div>
-
-  <main>
-
-    <!-- ========================================== -->
-    <!-- TAB 1: ADVANCED TRADING TERMINAL -->
-    <!-- ========================================== -->
-    <div id="tab-terminal" class="tab-content active">
-
-      <!-- Top Metric Cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card green">
-          <span class="kpi-title">Portfolio Equity</span>
-          <span class="kpi-val" id="term-kpi-equity">$100,000.00</span>
-          <span class="kpi-sub" id="term-kpi-equity-sub">Cash: $100,000.00</span>
-        </div>
-        <div class="kpi-card purple">
-          <span class="kpi-title">Active Ticker Quote</span>
-          <span class="kpi-val" id="term-kpi-price">$372.22</span>
-          <span class="kpi-sub" id="term-kpi-change">+0.00% Today</span>
-        </div>
-        <div class="kpi-card orange">
-          <span class="kpi-title">Technical Consensus</span>
-          <span class="kpi-val" id="term-kpi-rec" style="font-size: 1.35rem;">BUY</span>
-          <span class="kpi-sub" id="term-kpi-score">Score: +2 / +5 (Bullish Bias)</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Open Positions</span>
-          <span class="kpi-val" id="term-kpi-positions">0</span>
-          <span class="kpi-sub" id="term-kpi-unrealized">Unrealized PnL: $0.00</span>
-        </div>
-      </div>
-
-      <!-- Live execution tape and creative quick tools -->
-      <div class="terminal-tools">
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">📡 Live Trade Tape</div>
-              <div class="card-subtitle">Manual + AI executions, refreshed every 5 seconds</div>
-            </div>
-            <span class="engine-status-pill" style="font-size: 0.68rem; padding: 0.2rem 0.55rem;"><span class="pulse-dot"></span> STREAMING</span>
-          </div>
-          <div id="live-trade-tape" class="live-tape" aria-live="polite">
-            <div class="tape-empty">Waiting for the first filled order...</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">🧪 Trade Lab</div>
-              <div class="card-subtitle">Fast sizing for <span class="tk-label">TSLA</span></div>
-            </div>
-            <span id="trade-lab-quote" style="font-weight: 800; color: var(--cyan);">$0.00</span>
-          </div>
-          <div class="tool-grid">
-            <button class="btn btn-success tool-button" onclick="quickTrade('Buy', 0.10)">⚡ Buy 10% cash<small>Risk-sized entry</small></button>
-            <button class="btn btn-danger tool-button" onclick="quickTrade('Sell', 0.25)">↘ Sell 25% held<small>Trim the position</small></button>
-            <button class="btn btn-secondary tool-button" onclick="sizeOrderByRisk()">🎯 1% risk size<small>Uses stop-loss setting</small></button>
-            <button class="btn btn-secondary tool-button" onclick="flattenSelectedTicker()">⏹ Flatten ticker<small>Close selected position</small></button>
-          </div>
-          <div id="trade-lab-status" style="font-size: 0.75rem; color: var(--text-muted);">Ready for a paper trade.</div>
-        </div>
-      </div>
-
-      <div class="card" style="border-color: rgba(245, 158, 11, 0.35);">
-        <div class="card-header">
-          <div>
-            <div class="card-title">🛡️ Risk Cockpit</div>
-            <div class="card-subtitle">Server-enforced paper account limits</div>
-          </div>
-          <span id="risk-day-label" style="font-size: 0.72rem; color: var(--text-dim);">--</span>
-        </div>
-        <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
-          <div class="signal-item"><span class="signal-item-name">Daily PnL</span><span class="signal-item-val" id="risk-daily-pnl">$0.00</span><span class="signal-item-desc" id="risk-daily-pnl-limit">Limit: $0.00</span></div>
-          <div class="signal-item"><span class="signal-item-name">Largest Position</span><span class="signal-item-val" id="risk-largest-position">0.00%</span><span class="signal-item-desc" id="risk-position-limit">Limit: 25.00%</span></div>
-          <div class="signal-item"><span class="signal-item-name">Trading Guard</span><span class="signal-item-val" id="risk-guard-status">ARMED</span><span class="signal-item-desc">Exits remain available</span></div>
-        </div>
-      </div>
-
-      <!-- Main Terminal Layout -->
-      <div class="terminal-layout">
-
-        <!-- Left: Interactive Charts (Price + Indicators) -->
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">
-                <span id="chart-title-ticker">TSLA</span> • Technical Analysis & Indicator Overlay
-              </div>
-              <div class="card-subtitle">SMA (20, 50) • Bollinger Bands (20, 2) • RSI (14) • MACD (12, 26, 9) • <span id="market-data-status">Waiting for quote...</span></div>
-            </div>
-
-            <div class="chart-legend">
-              <label class="legend-item"><input type="checkbox" id="chk-sma20" checked onchange="drawTerminalChart()"> <span class="legend-color" style="background: var(--cyan);"></span> SMA 20</label>
-              <label class="legend-item"><input type="checkbox" id="chk-sma50" checked onchange="drawTerminalChart()"> <span class="legend-color" style="background: var(--purple);"></span> SMA 50</label>
-              <label class="legend-item"><input type="checkbox" id="chk-bb" checked onchange="drawTerminalChart()"> <span class="legend-color" style="background: var(--accent);"></span> Bollinger</label>
-              <label class="legend-item"><input type="checkbox" id="chk-rsi" checked onchange="drawTerminalChart()"> <span class="legend-color" style="background: var(--yellow);"></span> RSI 14</label>
-              <label class="legend-item"><input type="checkbox" id="chk-macd" checked onchange="drawTerminalChart()"> <span class="legend-color" style="background: var(--orange);"></span> MACD</label>
-              <label class="legend-item"><input type="checkbox" id="chk-candles" checked onchange="drawTerminalChart()"> Candles</label>
-            </div>
-          </div>
-
-          <!-- Price & MAs & BB Chart -->
-          <div class="chart-container" id="terminal-chart-wrap" onmousemove="onTerminalMouseMove(event)" onmouseleave="onTerminalMouseLeave()">
-            <svg class="terminal-chart" id="svg-terminal-main"></svg>
-          </div>
-
-          <!-- Subchart: RSI 14 -->
-          <div id="rsi-panel" style="display: flex; flex-direction: column;">
-            <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">RSI (14 Period - Overbought 70 / Oversold 30)</div>
-            <div class="subchart-container">
-              <svg class="terminal-chart" id="svg-terminal-rsi"></svg>
-            </div>
-          </div>
-
-          <!-- Subchart: MACD -->
-          <div id="macd-panel" style="display: flex; flex-direction: column;">
-            <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">MACD (12, 26, 9 - Signal Line & Histogram)</div>
-            <div class="subchart-container">
-              <svg class="terminal-chart" id="svg-terminal-macd"></svg>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Actions, AI Evaluation & Order Entry -->
-        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
-
-          <!-- Technical Signal Meter -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">🎯 Technical Signal Meter</div>
-              <button class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="loadMarketData()">🔄 Refresh</button>
-            </div>
-
-            <div class="signal-gauge-box">
-              <div class="gauge-rec-badge" id="gauge-badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 2px solid #10b981;">
-                BUY
-              </div>
-              <div style="font-size: 0.78rem; color: var(--text-muted);" id="gauge-summary-text">
-                RSI & Moving Averages indicate bullish trend alignment.
-              </div>
-
-              <div class="signal-breakdown">
-                <div class="signal-item">
-                  <div class="signal-item-name">RSI (14)</div>
-                  <div class="signal-item-val" id="sig-rsi-val">46.4</div>
-                  <div class="signal-item-desc" id="sig-rsi-desc">Neutral / Bullish</div>
-                </div>
-                <div class="signal-item">
-                  <div class="signal-item-name">MACD (12,26,9)</div>
-                  <div class="signal-item-val" id="sig-macd-val">+2.63</div>
-                  <div class="signal-item-desc" id="sig-macd-desc">Bullish Cross</div>
-                </div>
-                <div class="signal-item">
-                  <div class="signal-item-name">Trend (SMA 20/50)</div>
-                  <div class="signal-item-val" id="sig-ma-val">Uptrend</div>
-                  <div class="signal-item-desc" id="sig-ma-desc">Price > SMA20</div>
-                </div>
-                <div class="signal-item">
-                  <div class="signal-item-name">Bollinger %B</div>
-                  <div class="signal-item-val" id="sig-bb-val">55.2%</div>
-                  <div class="signal-item-desc" id="sig-bb-desc">Normal Volatility</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Instant AI Decision Trigger -->
-          <div class="card" style="border-color: rgba(139, 92, 246, 0.4); background: linear-gradient(180deg, rgba(139, 92, 246, 0.08), var(--card-bg));">
-            <div class="card-header">
-              <div class="card-title">🤖 Agentic AI Decision Engine</div>
-              <span class="brand-badge">GROQ + OPENROUTER</span>
-            </div>
-
-            <p style="font-size: 0.78rem; color: var(--text-muted);">
-              Trigger an instant LLM trading decision using multi-layer cognitive memory & news catalysts with automatic failover.
-            </p>
-
-            <button class="btn btn-ai" id="btn-run-ai" style="padding: 0.75rem; justify-content: center; font-size: 0.9rem;" onclick="runAIDecision()">
-              ⚡ Run AI Trade for <span id="ai-btn-ticker">TSLA</span>
-            </button>
-
-            <!-- Latest AI Output Snippet -->
-            <div id="ai-decision-preview" style="display: none;" class="ai-decision-card">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="badge" id="ai-res-badge">BUY</span>
-                <span style="font-size: 0.72rem; color: #a78bfa;" id="ai-res-provider">GROQ (openai/gpt-oss-120b)</span>
-              </div>
-              <div style="font-size: 0.82rem; color: #e2e8f0;" id="ai-res-reasoning">Reasoning...</div>
-              <div style="font-size: 0.7rem; color: #94a3b8;" id="ai-res-memories">Cited Memories: None</div>
-            </div>
-          </div>
-
-          <!-- Active Position & PnL Banner for Selected Ticker -->
-          <div class="card" id="card-active-pos" style="border-color: rgba(59, 130, 246, 0.4); background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), var(--card-bg));">
-            <div class="card-header">
-              <div class="card-title">💼 Active Position: <span id="pos-banner-ticker">TSLA</span></div>
-              <span class="badge" id="pos-banner-status">FLAT (NO POSITION)</span>
-            </div>
-
-            <!-- When User Holds a Position -->
-            <div id="pos-banner-details" style="display: none; flex-direction: column; gap: 0.75rem;">
-              <div style="background: #080c14; padding: 0.85rem 1rem; border-radius: 8px; border: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Unrealized Profit / Loss</div>
-                  <div style="font-size: 1.45rem; font-weight: 800;" id="pos-banner-pnl">+$0.00 (+0.00%)</div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Market Value</div>
-                  <div style="font-size: 1.15rem; font-weight: 700; color: #fff;" id="pos-banner-val">$0.00</div>
-                </div>
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
-                <div class="signal-item">
-                  <span class="signal-item-name">Shares Held</span>
-                  <span class="signal-item-val" id="pos-banner-shares">0</span>
-                </div>
-                <div class="signal-item">
-                  <span class="signal-item-name">Avg Buy Price</span>
-                  <span class="signal-item-val" id="pos-banner-avg">$0.00</span>
-                </div>
-                <div class="signal-item">
-                  <span class="signal-item-name">Invested Cost</span>
-                  <span class="signal-item-val" id="pos-banner-cost">$0.00</span>
-                </div>
-              </div>
-
-              <!-- Manual Sell & Take Profit Buttons -->
-              <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-danger" id="btn-quick-sell-all" style="flex: 1.3; justify-content: center; font-size: 0.82rem; padding: 0.65rem;" onclick="closeCurrentTicker(1.0)">
-                  💰 Sell 100% (Market Exit)
-                </button>
-                <button class="btn btn-secondary" id="btn-quick-sell-half" style="flex: 0.8; justify-content: center; font-size: 0.82rem; padding: 0.65rem;" onclick="closeCurrentTicker(0.5)">
-                  Sell 50%
-                </button>
-              </div>
-            </div>
-
-            <!-- When User Holds No Position -->
-            <div id="pos-banner-empty" style="font-size: 0.82rem; color: var(--text-muted); text-align: center; padding: 0.6rem;">
-              You hold no active shares in <span class="tk-label" style="font-weight: 700; color: #fff;">TSLA</span>. Use the Order Ticket below to Buy.
-            </div>
-          </div>
-
-          <!-- Manual Order Ticket -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">⚡ Manual Order Ticket</div>
-              <span style="font-size: 0.78rem; color: var(--text-muted);" id="order-mark-price">$372.22</span>
-            </div>
-
-            <div class="order-form">
-              <div class="action-toggle">
-                <button class="action-btn buy active" id="btn-action-buy" onclick="setOrderAction('Buy')">BUY / LONG</button>
-                <button class="action-btn sell" id="btn-action-sell" onclick="setOrderAction('Sell')">SELL / SHORT</button>
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
-                <div>
-                  <div class="control-label" style="margin-bottom: 0.25rem;">Order Type</div>
-                  <select id="order-type" style="width: 100%;">
-                    <option value="Market">Market</option>
-                    <option value="Limit">Limit</option>
-                    <option value="Stop">Stop</option>
-                  </select>
-                </div>
-                <div>
-                  <div class="control-label" style="margin-bottom: 0.25rem;">Shares</div>
-                  <input type="number" id="order-shares" value="10" min="0.01" step="1" style="width: 100%;" oninput="onSharesChange()">
-                </div>
-              </div>
-
-              <div id="held-shares-notice" style="display: none; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--cyan); background: rgba(6, 182, 212, 0.1); padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid rgba(6, 182, 212, 0.25);">
-                <span>Holding: <strong id="held-qty-val">0</strong> shares</span>
-                <button type="button" class="btn btn-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="autofillHeldShares()">Sell Held Shares</button>
-              </div>
-
-              <!-- Quick Capital Presets -->
-              <div class="preset-pills">
-                <button class="preset-pill" onclick="setCapitalPreset(0.10)">10% Cash</button>
-                <button class="preset-pill" onclick="setCapitalPreset(0.25)">25% Cash</button>
-                <button class="preset-pill" onclick="setCapitalPreset(0.50)">50% Cash</button>
-                <button class="preset-pill" onclick="setCapitalPreset(1.00)">100% Cash</button>
-              </div>
-
-              <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); background: #080c14; padding: 0.5rem 0.75rem; border-radius: 6px;">
-                <span>Estimated Notional:</span>
-                <span style="font-weight: 700; color: #fff;" id="order-est-notional">$3,722.20</span>
-              </div>
-
-              <button class="btn btn-success" id="btn-submit-order" style="padding: 0.75rem; justify-content: center; font-size: 0.9rem;" onclick="submitManualOrder()">
-                Submit BUY Order
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-    <!-- ========================================== -->
-    <!-- TAB 2: AGENTIC AI HARNESS CONTROLLER -->
-    <!-- ========================================== -->
-    <div id="tab-agentic" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">🤖 Autonomous Trading Agent Loop & Stream</div>
-            <div class="card-subtitle">Continuous multi-ticker evaluation with multi-layer memory retrieval and paper broker execution</div>
-          </div>
-          <div class="toolbar-group">
-            <span class="control-label">Interval:</span>
-            <select id="auto-interval-select" onchange="updateAutoInterval()">
-              <option value="10">Every 10s</option>
-              <option value="30" selected>Every 30s</option>
-              <option value="60">Every 60s</option>
-            </select>
-            <button class="btn btn-success" id="btn-auto-agent" onclick="toggleAutoAgent()">▶ Start Auto Agent</button>
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <div class="control-label">Active Provider Hierarchy & Failover Strategy</div>
-            <div class="signal-item" style="padding: 0.85rem;">
-              <div style="font-weight: 700; color: #fff;">1. Primary Provider: <span style="color: var(--cyan);">Groq</span></div>
-              <div style="color: var(--text-dim); font-size: 0.75rem; margin-top: 0.2rem;">Model: openai/gpt-oss-120b (Ultra-low latency inference, structured JSON output)</div>
-            </div>
-            <div class="signal-item" style="padding: 0.85rem;">
-              <div style="font-weight: 700; color: #fff;">2. Failover Provider: <span style="color: var(--purple);">OpenRouter Free Models</span></div>
-              <div style="color: var(--text-dim); font-size: 0.75rem; margin-top: 0.2rem;">Active Fallback Chain: recursive/flint-v1.0:free, nvidia/nemotron-3.5-lightning:free, google/gemma-4-31b-it:free (Auto-rotates on 429)</div>
-            </div>
-            <div class="signal-item" style="padding: 0.85rem;">
-              <div style="font-weight: 700; color: #fff;">3. Memory Retrieval: <span style="color: var(--green);">Cognitive 4-Layer (Ours)</span></div>
-              <div style="color: var(--text-dim); font-size: 0.75rem; margin-top: 0.2rem;">Working Recency Decay + Topic Cross-Matching + Learned Outcome Recall Reinforcement</div>
-            </div>
-          </div>
-
-          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <div class="control-label">Live Decision Stream & Execution Terminal</div>
-            <div class="console-stream" id="auto-agent-console">
-[Agentic Trade Harness] Initialized.
-Dual LLM providers ready: Groq (Primary) ➔ OpenRouter Free Models (Failover).
-Strategy: AGGRESSIVE. Ready to dispatch trades.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========================================== -->
-    <!-- TAB 3: POSITIONS & PORTFOLIO -->
-    <!-- ========================================== -->
-    <div id="tab-portfolio" class="tab-content">
-      <div class="kpi-grid">
-        <div class="kpi-card green">
-          <span class="kpi-title">Total Equity</span>
-          <span class="kpi-val" id="port-equity">$100,000.00</span>
-          <span class="kpi-sub" id="port-equity-change">Initial: $100,000.00</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-title">Cash Available</span>
-          <span class="kpi-val" id="port-cash">$100,000.00</span>
-          <span class="kpi-sub">Purchasing Power</span>
-        </div>
-        <div class="kpi-card orange">
-          <span class="kpi-title">Unrealized PnL</span>
-          <span class="kpi-val" id="port-unrealized">$0.00</span>
-          <span class="kpi-sub" id="port-unrealized-pct">+0.00%</span>
-        </div>
-        <div class="kpi-card purple">
-          <span class="kpi-title">Realized PnL</span>
-          <span class="kpi-val" id="port-realized">$0.00</span>
-          <span class="kpi-sub">Closed Trades</span>
-        </div>
-      </div>
-
-      <!-- Open Positions Table -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">📊 Open Positions</div>
-          <button class="btn btn-secondary" onclick="fetchPortfolio()">🔄 Refresh</button>
-        </div>
-
-        <div class="table-container">
-          <table id="positions-table">
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Side</th>
-                <th>Shares</th>
-                <th>Avg Buy Price</th>
-                <th>Current Mark Price</th>
-                <th>Invested Cost</th>
-                <th>Market Value</th>
-                <th>Profit / Loss ($)</th>
-                <th>PnL (%)</th>
-                <th>Manual Sell / Take Profit</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Populated via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Historical Orders Table -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">📜 Order Audit Log</div>
-          <div class="toolbar-group">
-            <button class="btn btn-secondary" onclick="exportOrdersCSV()">📥 Export CSV</button>
-            <button class="btn btn-danger" onclick="resetPortfolioAccount()">⚠️ Reset Account</button>
-          </div>
-        </div>
-
-        <div class="table-container">
-          <table id="orders-table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Ticker</th>
-                <th>Action</th>
-                <th>Shares</th>
-                <th>Price ($)</th>
-                <th>Notional ($)</th>
-                <th>Type</th>
-                <th>Provider / Source</th>
-                <th>Reasoning / Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Populated via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========================================== -->
-    <!-- MEMORY AGENT (research memory, live)        -->
-    <!-- ========================================== -->
-    <div id="tab-agent" class="tab-content">
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <span class="control-label">Ticker</span>
-          <select id="ag-ticker" onchange="ResearchApp.loadAgent()"></select>
-          <span class="control-label">LLM backbone</span>
-          <select id="ag-backbone"></select>
-          <button class="btn btn-ai" id="ag-ask" onclick="ResearchApp.askLLM()">🧠 Ask LLM agent</button>
-          <button class="btn btn-success" id="ag-run" onclick="ResearchApp.runAgent()">⚡ Run agent → paper trade</button>
-        </div>
-        <div class="toolbar-group">
-          <span class="ra-muted" id="ag-status">loading…</span>
-          <button class="btn btn-secondary" id="ag-refresh" onclick="ResearchApp.refreshData()">⟳ Refresh market data</button>
-        </div>
-      </div>
-      <div class="ra-job" id="ag-job" hidden></div>
-
-      <div class="kpi-grid" id="ag-kpis"></div>
-
-      <div class="ra-grid-2">
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Working memory retrieved by our agent</div>
-              <div class="card-subtitle">Top-K per layer · credibility (N1) · corroboration (N2) · contradiction-filtered (N3) · situational query (N4)</div>
-            </div>
-          </div>
-          <div id="ag-memories" class="ra-memories"></div>
-        </div>
-        <div class="ra-col">
-          <div class="card">
-            <div class="card-header"><div class="card-title">Recommendation</div><span id="ag-consensus-badge"></span></div>
-            <ul id="ag-reasons" class="ra-reasons"></ul>
-            <div id="ag-llm" class="ra-llm" hidden></div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Memory architectures on this day</div>
-                <div class="card-subtitle">Same data, same encoder — only the memory differs. Threshold = rolling selection on the trailing 42 days.</div>
-              </div>
-            </div>
-            <div class="table-container"><table class="ra-table" id="ag-systems"></table></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">Price and memory signal, last 90 sessions</div></div>
-            <div id="ag-history"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========================================== -->
-    <!-- SCANNER                                     -->
-    <!-- ========================================== -->
-    <div id="tab-scanner" class="tab-content">
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <span class="card-title">Ten-stock agent scanner</span>
-          <span class="ra-muted" id="sc-date"></span>
-        </div>
-        <div class="toolbar-group">
-          <button class="btn btn-secondary" onclick="ResearchApp.loadScanner()">⟳ Rescan</button>
-          <button class="btn btn-success" onclick="ResearchApp.executeAll()">Execute consensus on paper (all)</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-subtitle">Consensus = our memory agent and the price-only LightGBM must not disagree; episodic abstention forces Hold. Click a row to open the Memory Agent.</div>
-        <div class="table-container"><table class="ra-table ra-clickable" id="sc-table"></table></div>
-      </div>
-    </div>
-
-    <!-- ========================================== -->
-    <!-- RESEARCH LAB                                -->
-    <!-- ========================================== -->
-    <div id="tab-research" class="tab-content">
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <span class="control-label">Protocol</span>
-          <div class="ra-seg" id="rl-protocol">
-            <button data-v="rolling" class="active">Rolling walk-forward</button>
-            <button data-v="fixed">Fixed split</button>
-          </div>
-          <span class="control-label">Universe</span>
-          <div class="ra-seg" id="rl-scope">
-            <button data-v="all" class="active">10 stocks</button>
-            <button data-v="finmem5">FinMem's 5</button>
-          </div>
-        </div>
-        <span class="ra-muted" id="rl-range"></span>
-      </div>
-      <div class="kpi-grid" id="rl-kpis"></div>
-      <div class="card">
-        <div class="card-header">
-          <div><div class="card-title">Equity curves (equal-weight, net of 5 bps)</div>
-          <div class="card-subtitle">Click a legend entry to show or hide a strategy.</div></div>
-        </div>
-        <div id="rl-legend" class="ra-legend"></div>
-        <div id="rl-equity" class="ra-chart"></div>
-      </div>
-      <div class="ra-grid-2">
-        <div class="card">
-          <div class="card-header"><div class="card-title">All strategies (test period)</div></div>
-          <div class="table-container"><table class="ra-table" id="rl-table"></table></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div><div class="card-title">Ours vs. each baseline</div>
-          <div class="card-subtitle">Wilcoxon on pooled (ticker, date) returns, Holm-adjusted; ΔSharpe with 95% block-bootstrap CI</div></div></div>
-          <div class="table-container"><table class="ra-table" id="rl-tests"></table></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title">Per-ticker Sharpe ratio</div></div>
-        <div class="table-container" id="rl-heatmap"></div>
-      </div>
-      <div class="ra-grid-2">
-        <div class="card">
-          <div class="card-header"><div><div class="card-title">Predictive content of the memory signal</div>
-          <div class="card-subtitle">Spearman IC vs. next-day market-adjusted return</div></div></div>
-          <div id="rl-ic"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div><div class="card-title">LLM backbones (FinMem tickers, last 50 sessions)</div>
-          <div class="card-subtitle">Same retrieved memory, FinMem-style prompt, temperature 0</div></div></div>
-          <div class="table-container"><table class="ra-table" id="rl-llm"></table></div>
-        </div>
-      </div>
-      <div class="ra-grid-2">
-        <div class="card">
-          <div class="card-header"><div class="card-title">Memory operations over the whole run</div></div>
-          <div class="table-container"><table class="ra-table" id="rl-ops"></table></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div><div class="card-title">Learned source credibility (N1)</div>
-          <div class="card-subtitle">Posterior hit-rate of each headline category (market-adjusted, online)</div></div></div>
-          <div id="rl-cred"></div>
-        </div>
-      </div>
-      <div class="card ra-findings">
-        <div class="card-title">What the evidence says</div>
-        <ul id="rl-findings"></ul>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title">Paper figures</div><span class="card-subtitle">paper/figures · click to enlarge</span></div>
-        <div id="rl-figures" class="ra-figures"></div>
-      </div>
-      <div id="ra-lightbox" class="ra-lightbox" hidden onclick="this.hidden=true"><img alt=""></div>
-    </div>
-    <!-- ========================================== -->
-    <!-- TAB 7: HARNESS SETTINGS -->
-    <!-- ========================================== -->
-    <div id="tab-settings" class="tab-content">
-      <div class="card" style="max-width: 700px;">
-        <div class="card-header">
-          <div class="card-title">⚙️ Agentic Trading Harness Configuration</div>
-        </div>
-
-        <div class="order-form">
-          <div>
-            <div class="control-label" style="margin-bottom: 0.35rem;">Initial Trading Capital ($)</div>
-            <input type="number" id="set-capital" value="100000" step="5000">
-          </div>
-
-          <div>
-            <div class="control-label" style="margin-bottom: 0.35rem;">Default Strategy Risk Mode</div>
-            <select id="set-risk">
-              <option value="aggressive">Aggressive (Favor alpha capture and active momentum)</option>
-              <option value="standard">Standard (Balanced risk/reward and catalyst conviction)</option>
-              <option value="conservative">Conservative (Capital preservation, strict drawdown stop)</option>
-            </select>
-          </div>
-
-          <div>
-            <div class="control-label" style="margin-bottom: 0.35rem;">Max Position Size (% of Portfolio)</div>
-            <input type="number" id="set-max-pos" value="25" min="5" max="100">
-          </div>
-
-          <div>
-            <div class="control-label" style="margin-bottom: 0.35rem;">Default Stop Loss (%)</div>
-            <input type="number" id="set-stop-loss" value="5" min="1" max="50">
-          </div>
-
-          <div>
-            <div class="control-label" style="margin-bottom: 0.35rem;">LLM Provider Hierarchy</div>
-            <select id="set-provider">
-              <option value="auto">Auto (Groq Primary ➔ OpenRouter Free Models Failover)</option>
-              <option value="groq">Groq Preferred</option>
-              <option value="openrouter">OpenRouter Free Models Preferred</option>
-            </select>
-          </div>
-
-          <button class="btn btn-success" style="padding: 0.75rem; justify-content: center;" onclick="saveHarnessSettings()">
-            💾 Save Harness Settings
+  <div class="main-col">
+    <!-- ============================================================ top bar -->
+    <header class="topbar">
+      <button class="icon-btn menu-btn" onclick="document.body.classList.toggle('nav-open')" data-i18n-title="a11y.menu">☰</button>
+      <h1 id="page-title">Home</h1>
+      <div class="topbar-right">
+        <div class="picker">
+          <button class="picker-btn" onclick="App.togglePicker(event)" aria-haspopup="listbox" data-i18n-title="picker.title">
+            <span class="lbl" data-i18n="picker.label">Stock</span><span id="picker-ticker">TSLA</span><span id="picker-price"></span><span class="dim">▾</span>
           </button>
+          <div class="picker-pop" id="picker-pop" hidden>
+            <input type="search" id="picker-search" data-i18n-ph="picker.search" placeholder="Search stocks…" autocomplete="off">
+            <div id="picker-list" role="listbox"></div>
+          </div>
         </div>
+        <div class="seg small" role="group" aria-label="Language">
+          <button data-lang="en" onclick="App.setLang('en')">EN</button>
+          <button data-lang="bn" onclick="App.setLang('bn')">বাং</button>
+        </div>
+        <button class="icon-btn" id="theme-btn" onclick="App.toggleTheme()" data-i18n-title="a11y.theme">☾</button>
       </div>
-    </div>
-
-  </main>
-
-  <div class="toast" id="toast-msg">Notification</div>
-
-  <script>
-    /* State */
-    let currentTab = 'terminal';
-    let currentTicker = 'TSLA';
-    let currentOrderAction = 'Buy';
-    let currentRiskProfile = 'aggressive';
-    let autoAgentActive = false;
-    let autoAgentTimer = null;
-
-    let marketData = null;
-    let portfolioData = null;
-    let watchlistTickers = ['TSLA', 'AMZN', 'MSFT', 'NFLX', 'COIN'];
-    let latestPrices = { TSLA: 372.22, AMZN: 248.0, MSFT: 524.51, NFLX: 65.85, COIN: 164.45 };
-
-    const COLORS = {
-      ours: '#a855f7',
-      fin_mem: '#f97316',
-      plain_rag: '#3b82f6',
-      no_memory: '#64748b',
-      buy_and_hold: '#10b981'
-    };
-
-    /* Init */
-    window.addEventListener('DOMContentLoaded', () => {
-      fetchSummary();
-      loadMarketData();
-      fetchPortfolio();
-      setInterval(fetchPortfolio, 5000);
-      setInterval(loadMarketData, 5000);
-    });
-
-    function showToast(msg, isErr = false) {
-      const t = document.getElementById('toast-msg');
-      t.textContent = msg;
-      t.style.display = 'flex';
-      t.style.borderLeftColor = isErr ? 'var(--red)' : 'var(--green)';
-      setTimeout(() => { t.style.display = 'none'; }, 3500);
-    }
-
-    function switchTab(tabId) {
-      currentTab = tabId;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-      const btn = (typeof event !== 'undefined' && event && event.currentTarget && event.currentTarget.classList)
-        ? event.currentTarget
-        : document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
-      if (btn) btn.classList.add('active');
-      document.getElementById('tab-' + tabId).classList.add('active');
-
-      if (tabId === 'terminal') { loadMarketData(); fetchPortfolio(); }
-      else if (tabId === 'portfolio') fetchPortfolio();
-      else if (tabId === 'agent') ResearchApp.loadAgent();
-      else if (tabId === 'scanner') ResearchApp.loadScanner();
-      else if (tabId === 'research') ResearchApp.loadResearch();
-    }
-
-    async function fetchSummary() {
-      try {
-        const res = await fetch('/api/summary');
-        const data = await res.json();
-        watchlistTickers = [...new Set([...(data.tickers || []), ...Object.keys(data.latest_prices || {})])].sort();
-        if (data.latest_prices) latestPrices = data.latest_prices;
-        renderTickerBar(watchlistTickers);
-      } catch (err) {
-        console.error("Summary error", err);
-      }
-    }
-
-    function renderTickerBar(tickers) {
-      const bar = document.getElementById('ticker-pills-bar');
-      bar.innerHTML = '';
-      tickers.forEach(tk => {
-        const p = latestPrices[tk] || 100.0;
-        const pill = document.createElement('div');
-        pill.className = `ticker-pill ${tk === currentTicker ? 'active' : ''}`;
-        pill.onclick = () => selectTicker(tk);
-        pill.innerHTML = `
-          <span>${tk}</span>
-          <span class="quote-price">$${p.toFixed(2)}</span>
-        `;
-        bar.appendChild(pill);
-      });
-    }
-
-    function selectTicker(tk) {
-      currentTicker = tk;
-      document.querySelectorAll('.ticker-pill').forEach(el => {
-        el.classList.toggle('active', el.textContent.includes(tk));
-      });
-      document.getElementById('chart-title-ticker').textContent = tk;
-      document.getElementById('ai-btn-ticker').textContent = tk;
-      loadMarketData();
-    }
-
-    function setRiskProfile(profile) {
-      currentRiskProfile = profile;
-      document.querySelectorAll('.profile-pill').forEach(p => p.classList.remove('active'));
-      document.querySelector(`.profile-pill.${profile}`).classList.add('active');
-      showToast(`Strategy Profile set to: ${profile.toUpperCase()}`);
-      fetch('/api/update_settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ risk_profile: profile })
-      });
-    }
-
-    /* Market Data & Indicators */
-    async function loadMarketData() {
-      try {
-        const [resM, resT] = await Promise.all([
-          fetch(`/api/market_data?ticker=${currentTicker}`),
-          fetch(`/api/technical_analysis?ticker=${currentTicker}`)
-        ]);
-        marketData = await resM.json();
-        const tech = await resT.json();
-
-        latestPrices[currentTicker] = marketData.latest_price;
-        if (!watchlistTickers.includes(currentTicker)) watchlistTickers.push(currentTicker);
-        renderTickerBar(watchlistTickers);
-        const source = marketData.price_source === 'alpaca_paper_live' ? 'LIVE PAPER QUOTE' : 'HISTORICAL CSV FALLBACK';
-        const sourceEl = document.getElementById('market-data-status');
-        if (sourceEl) sourceEl.textContent = `${source} • ${marketData.as_of || 'unknown time'}`;
-
-        updateTerminalKPIs(tech);
-        drawTerminalChart();
-        renderSelectedPosition();
-      } catch (err) {
-        console.error("Failed to load market data", err);
-      }
-    }
-
-    function updateTerminalKPIs(tech) {
-      if (!marketData || !marketData.prices) return;
-      const lastP = marketData.latest_price;
-      const chg = marketData.change_pct;
-
-      document.getElementById('term-kpi-price').textContent = `$${lastP.toFixed(2)}`;
-      const elChg = document.getElementById('term-kpi-change');
-      elChg.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}% Today`;
-      elChg.className = `kpi-sub quote-change ${chg >= 0 ? 'up' : 'down'}`;
-
-      document.getElementById('order-mark-price').textContent = `$${lastP.toFixed(2)}`;
-      onSharesChange();
-
-      // Technical Signals
-      const rec = tech.recommendation || 'NEUTRAL';
-      const col = tech.recommendation_color || '#3b82f6';
-      const b = document.getElementById('gauge-badge');
-      b.textContent = rec;
-      b.style.color = col;
-      b.style.borderColor = col;
-      b.style.background = col + '22';
-
-      document.getElementById('term-kpi-rec').textContent = rec;
-      document.getElementById('term-kpi-rec').style.color = col;
-      document.getElementById('term-kpi-score').textContent = `Score: ${tech.score > 0 ? '+' : ''}${tech.score} / +5`;
-
-      if (tech.signals) {
-        if (tech.signals.rsi) {
-          document.getElementById('sig-rsi-val').textContent = tech.signals.rsi.value;
-          document.getElementById('sig-rsi-desc').textContent = tech.signals.rsi.status;
-        }
-        if (tech.signals.macd) {
-          document.getElementById('sig-macd-val').textContent = tech.signals.macd.macd.toFixed(2);
-          document.getElementById('sig-macd-desc').textContent = tech.signals.macd.status;
-        }
-        if (tech.signals.moving_averages) {
-          document.getElementById('sig-ma-val').textContent = tech.signals.moving_averages.signal;
-          document.getElementById('sig-ma-desc').textContent = tech.signals.moving_averages.status;
-        }
-        if (tech.signals.bollinger) {
-          document.getElementById('sig-bb-val').textContent = tech.signals.bollinger.percent_b + '%';
-          document.getElementById('sig-bb-desc').textContent = tech.signals.bollinger.status;
-        }
-      }
-    }
-
-    /* Terminal SVG Chart with SMA, Bollinger, RSI, MACD */
-    function drawTerminalChart() {
-      if (!marketData || !marketData.dates || marketData.dates.length === 0) return;
-
-      const dates = marketData.dates;
-      const prices = marketData.prices;
-      const ind = marketData.indicators || {};
-      const candles = marketData.candles || [];
-      const numPts = dates.length;
-
-      // Draw Main Panel (Price + MAs + BB)
-      const svgMain = document.getElementById('svg-terminal-main');
-      const wrapMain = document.getElementById('terminal-chart-wrap');
-      const W = wrapMain.getBoundingClientRect().width || 800;
-      const H = 420;
-      const pad = { top: 25, right: 30, bottom: 35, left: 60 };
-
-      let minP = Math.min(...prices) * 0.96;
-      let maxP = Math.max(...prices) * 1.04;
-
-      const getX = idx => pad.left + (idx / Math.max(1, numPts - 1)) * (W - pad.left - pad.right);
-      const getY = val => pad.top + (1 - (val - minP) / (maxP - minP)) * (H - pad.top - pad.bottom);
-
-      let html = '';
-
-      // Grid Lines
-      for (let i = 0; i <= 5; i++) {
-        const pVal = minP + (i / 5) * (maxP - minP);
-        const y = getY(pVal);
-        html += `<line x1="${pad.left}" y1="${y}" x2="${W - pad.right}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />`;
-        html += `<text x="${pad.left - 8}" y="${y + 4}" fill="#64748b" font-size="11" text-anchor="end">$${pVal.toFixed(1)}</text>`;
-      }
-
-      // Bollinger Bands Shaded Area
-      const showBB = document.getElementById('chk-bb').checked;
-      if (showBB && ind.bb_upper && ind.bb_lower) {
-        let bandPoly = '';
-        for (let i = 0; i < numPts; i++) {
-          if (ind.bb_upper[i] != null) bandPoly += `${getX(i)},${getY(ind.bb_upper[i])} `;
-        }
-        for (let i = numPts - 1; i >= 0; i--) {
-          if (ind.bb_lower[i] != null) bandPoly += `${getX(i)},${getY(ind.bb_lower[i])} `;
-        }
-        html += `<polygon points="${bandPoly}" fill="rgba(59, 130, 246, 0.08)" />`;
-        // Upper & Lower dashed lines
-        let dUpper = '', dLower = '';
-        for (let i = 0; i < numPts; i++) {
-          if (ind.bb_upper[i] != null) dUpper += `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(ind.bb_upper[i])} `;
-          if (ind.bb_lower[i] != null) dLower += `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(ind.bb_lower[i])} `;
-        }
-        html += `<path d="${dUpper}" fill="none" stroke="rgba(59, 130, 246, 0.4)" stroke-dasharray="4,4" stroke-width="1.2" />`;
-        html += `<path d="${dLower}" fill="none" stroke="rgba(59, 130, 246, 0.4)" stroke-dasharray="4,4" stroke-width="1.2" />`;
-      }
-
-      // Candlesticks or Price Line
-      const showCandles = document.getElementById('chk-candles').checked;
-      if (showCandles) {
-        candles.forEach((c, idx) => {
-          const x = getX(idx);
-          const yO = getY(c.open);
-          const yC = getY(c.close);
-          const yH = getY(c.high);
-          const yL = getY(c.low);
-          const isUp = c.close >= c.open;
-          const col = isUp ? '#10b981' : '#ef4444';
-
-          // Wick
-          html += `<line x1="${x}" y1="${yH}" x2="${x}" y2="${yL}" stroke="${col}" stroke-width="1.2" />`;
-          // Body
-          const top = Math.min(yO, yC);
-          const height = Math.max(2, Math.abs(yC - yO));
-          html += `<rect x="${x - 3}" y="${top}" width="6" height="${height}" fill="${col}" rx="1" />`;
-        });
-      } else {
-        let pLine = '';
-        for (let i = 0; i < numPts; i++) {
-          pLine += `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(prices[i])} `;
-        }
-        html += `<path d="${pLine}" fill="none" stroke="#f8fafc" stroke-width="2" />`;
-      }
-
-      // SMA 20 (Cyan)
-      if (document.getElementById('chk-sma20').checked && ind.sma_20) {
-        let dSMA = '';
-        for (let i = 0; i < numPts; i++) {
-          if (ind.sma_20[i] != null) dSMA += `${dSMA === '' ? 'M' : 'L'} ${getX(i)} ${getY(ind.sma_20[i])} `;
-        }
-        html += `<path d="${dSMA}" fill="none" stroke="var(--cyan)" stroke-width="1.8" />`;
-      }
-
-      // SMA 50 (Purple)
-      if (document.getElementById('chk-sma50').checked && ind.sma_50) {
-        let dSMA50 = '';
-        for (let i = 0; i < numPts; i++) {
-          if (ind.sma_50[i] != null) dSMA50 += `${dSMA50 === '' ? 'M' : 'L'} ${getX(i)} ${getY(ind.sma_50[i])} `;
-        }
-        html += `<path d="${dSMA50}" fill="none" stroke="var(--purple)" stroke-width="1.8" />`;
-      }
-
-      // X-axis Dates
-      const stepX = Math.ceil(numPts / 6);
-      for (let i = 0; i < numPts; i += stepX) {
-        const x = getX(i);
-        html += `<text x="${x}" y="${H - 10}" fill="#64748b" font-size="11" text-anchor="middle">${dates[i]}</text>`;
-      }
-
-      svgMain.innerHTML = html;
-
-      // Draw Subchart: RSI 14
-      const showRSI = document.getElementById('chk-rsi').checked;
-      document.getElementById('rsi-panel').style.display = showRSI ? 'flex' : 'none';
-      if (showRSI && ind.rsi_14) {
-        const svgRSI = document.getElementById('svg-terminal-rsi');
-        const hRSI = 130;
-        const getY_RSI = val => 15 + (1 - val / 100) * (hRSI - 35);
-        let rsiHtml = '';
-
-        // 70 and 30 lines
-        const y70 = getY_RSI(70);
-        const y30 = getY_RSI(30);
-        rsiHtml += `<line x1="${pad.left}" y1="${y70}" x2="${W - pad.right}" y2="${y70}" stroke="rgba(239,68,68,0.4)" stroke-dasharray="3,3" />`;
-        rsiHtml += `<line x1="${pad.left}" y1="${y30}" x2="${W - pad.right}" y2="${y30}" stroke="rgba(16,185,129,0.4)" stroke-dasharray="3,3" />`;
-        rsiHtml += `<text x="${pad.left - 8}" y="${y70 + 4}" fill="#ef4444" font-size="10" text-anchor="end">70</text>`;
-        rsiHtml += `<text x="${pad.left - 8}" y="${y30 + 4}" fill="#10b981" font-size="10" text-anchor="end">30</text>`;
-
-        let dRSI = '';
-        for (let i = 0; i < numPts; i++) {
-          if (ind.rsi_14[i] != null) dRSI += `${dRSI === '' ? 'M' : 'L'} ${getX(i)} ${getY_RSI(ind.rsi_14[i])} `;
-        }
-        rsiHtml += `<path d="${dRSI}" fill="none" stroke="var(--yellow)" stroke-width="1.8" />`;
-        svgRSI.innerHTML = rsiHtml;
-      }
-
-      // Draw Subchart: MACD
-      const showMACD = document.getElementById('chk-macd').checked;
-      document.getElementById('macd-panel').style.display = showMACD ? 'flex' : 'none';
-      if (showMACD && ind.macd) {
-        const svgMACD = document.getElementById('svg-terminal-macd');
-        const hMACD = 130;
-        let maxM = Math.max(...ind.macd.map(Math.abs), 2.0);
-        const getY_MACD = val => 15 + (1 - (val + maxM) / (2 * maxM)) * (hMACD - 35);
-
-        let mHtml = '';
-        const yZero = getY_MACD(0);
-        mHtml += `<line x1="${pad.left}" y1="${yZero}" x2="${W - pad.right}" y2="${yZero}" stroke="rgba(255,255,255,0.15)" />`;
-
-        // Histograms
-        if (ind.macd_hist) {
-          ind.macd_hist.forEach((h, idx) => {
-            const x = getX(idx);
-            const y = getY_MACD(h);
-            const col = h >= 0 ? 'rgba(16,185,129,0.6)' : 'rgba(239,68,68,0.6)';
-            const top = Math.min(yZero, y);
-            const height = Math.abs(y - yZero);
-            mHtml += `<rect x="${x - 2}" y="${top}" width="4" height="${height}" fill="${col}" />`;
-          });
-        }
-
-        // MACD Line (Blue) & Signal Line (Orange)
-        let dM = '', dS = '';
-        for (let i = 0; i < numPts; i++) {
-          if (ind.macd[i] != null) dM += `${dM === '' ? 'M' : 'L'} ${getX(i)} ${getY_MACD(ind.macd[i])} `;
-          if (ind.macd_signal && ind.macd_signal[i] != null) dS += `${dS === '' ? 'M' : 'L'} ${getX(i)} ${getY_MACD(ind.macd_signal[i])} `;
-        }
-        mHtml += `<path d="${dM}" fill="none" stroke="var(--accent)" stroke-width="1.5" />`;
-        mHtml += `<path d="${dS}" fill="none" stroke="var(--orange)" stroke-width="1.5" />`;
-        svgMACD.innerHTML = mHtml;
-      }
-    }
-
-    function onTerminalMouseMove(evt) {}
-    function onTerminalMouseLeave() {}
-
-    /* Order Execution (Manual) */
-    function setOrderAction(act) {
-      currentOrderAction = act;
-      document.getElementById('btn-action-buy').classList.toggle('active', act === 'Buy');
-      document.getElementById('btn-action-sell').classList.toggle('active', act === 'Sell');
-      const sBtn = document.getElementById('btn-submit-order');
-      sBtn.textContent = `Submit ${act.toUpperCase()} Order`;
-      sBtn.className = `btn ${act === 'Buy' ? 'btn-success' : 'btn-danger'}`;
-    }
-
-    function onSharesChange() {
-      const shares = parseFloat(document.getElementById('order-shares').value) || 1;
-      const p = latestPrices[currentTicker] || 100.0;
-      const notional = shares * p;
-      document.getElementById('order-est-notional').textContent = `$${notional.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-
-    function setCapitalPreset(fraction) {
-      const availCash = (portfolioData && portfolioData.cash) ? portfolioData.cash : 100000;
-      const p = latestPrices[currentTicker] || 100.0;
-      const targetBudget = availCash * fraction;
-      const shares = Math.max(1, Math.floor(targetBudget / p));
-      document.getElementById('order-shares').value = shares;
-      onSharesChange();
-    }
-
-    function setTradeLabStatus(message, isError = false) {
-      const el = document.getElementById('trade-lab-status');
-      el.textContent = message;
-      el.style.color = isError ? 'var(--red)' : 'var(--text-muted)';
-    }
-
-    function quickTrade(action, fraction) {
-      setOrderAction(action);
-      if (action === 'Buy') {
-        setCapitalPreset(fraction);
-      } else {
-        const held = (portfolioData?.positions || []).find(p => p.ticker === currentTicker);
-        const shares = held ? Math.max(0.01, Math.floor(held.shares * fraction * 100) / 100) : 0;
-        document.getElementById('order-shares').value = shares || 1;
-        onSharesChange();
-      }
-      setTradeLabStatus(`${action} ticket prepared for ${currentTicker}. Review and submit below.`);
-      document.getElementById('btn-submit-order').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    function sizeOrderByRisk() {
-      const price = latestPrices[currentTicker] || 100;
-      const stopLossPct = Number(portfolioData?.settings?.stop_loss_pct || 5) / 100;
-      const equity = Number(portfolioData?.equity || 100000);
-      const riskBudget = equity * 0.01;
-      const shares = Math.max(1, Math.floor(riskBudget / Math.max(price * stopLossPct, 0.01)));
-      setOrderAction('Buy');
-      document.getElementById('order-shares').value = shares;
-      onSharesChange();
-      setTradeLabStatus(`1% risk size: ${shares} shares, based on a ${Number(stopLossPct * 100).toFixed(1)}% stop.`);
-      document.getElementById('btn-submit-order').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    async function flattenSelectedTicker() {
-      const held = (portfolioData?.positions || []).find(p => p.ticker === currentTicker);
-      if (!held) {
-        setTradeLabStatus(`No open ${currentTicker} position to flatten.`, true);
-        return;
-      }
-      if (!confirm(`Close ${held.shares} shares of ${currentTicker}?`)) return;
-      await closePosition(currentTicker);
-      setTradeLabStatus(`${currentTicker} flatten request submitted.`);
-    }
-
-    async function submitManualOrder() {
-      const shares = parseFloat(document.getElementById('order-shares').value);
-      const orderType = document.getElementById('order-type').value;
-
-      try {
-        const res = await fetch('/api/manual_trade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ticker: currentTicker,
-            action: currentOrderAction,
-            shares: shares,
-            order_type: orderType,
-            notes: `Manual trade executed from Terminal UI`
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(`✅ ${currentOrderAction} ${shares} shares of ${currentTicker} Filled!`);
-          fetchPortfolio();
-        } else {
-          showToast(`🛡️ Order blocked: ${data.error}`, true);
-        }
-      } catch (err) {
-        showToast(`❌ Network error submitting order`, true);
-      }
-    }
-
-    /* Instant AI Trade Decision */
-    async function runAIDecision() {
-      const btn = document.getElementById('btn-run-ai');
-      btn.textContent = `🤖 Analyzing ${currentTicker}...`;
-      btn.disabled = true;
-
-      try {
-        const res = await fetch('/api/ai_trade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ticker: currentTicker,
-            risk_mode: currentRiskProfile
-          })
-        });
-        const data = await res.json();
-        btn.disabled = false;
-        btn.innerHTML = `⚡ Run AI Trade for <span>${currentTicker}</span>`;
-
-        if (data.success) {
-          const preview = document.getElementById('ai-decision-preview');
-          preview.style.display = 'flex';
-          const b = document.getElementById('ai-res-badge');
-          b.textContent = data.action;
-          b.className = `badge badge-${data.action.toLowerCase()}`;
-          document.getElementById('ai-res-provider').textContent = `${data.provider.toUpperCase()} (${data.model})`;
-          document.getElementById('ai-res-reasoning').textContent = data.reasoning;
-          document.getElementById('ai-res-memories').textContent = `Cited Memories: ${data.cited_memory_ids.length > 0 ? data.cited_memory_ids.join(', ') : 'None'}`;
-
-          showToast(`🤖 AI Generated ${data.action} for ${currentTicker}!`);
-          fetchPortfolio();
-        } else {
-          showToast(`❌ AI Error`, true);
-        }
-      } catch (err) {
-        btn.disabled = false;
-        btn.innerHTML = `⚡ Run AI Trade for <span>${currentTicker}</span>`;
-        showToast(`❌ Failed to connect to AI Harness`, true);
-      }
-    }
-
-    /* Auto Agent Runner */
-    function toggleAutoAgent() {
-      autoAgentActive = !autoAgentActive;
-      const btn = document.getElementById('btn-auto-agent');
-      if (autoAgentActive) {
-        btn.textContent = '⏹ Stop Auto Agent';
-        btn.className = 'btn btn-danger';
-        showToast('Autonomous Trading Agent Started');
-        logStream('[Auto Agent] Running autonomous cycles across active tickers...');
-        runAutoCycle();
-        const sec = parseInt(document.getElementById('auto-interval-select').value) || 30;
-        autoAgentTimer = setInterval(runAutoCycle, sec * 1000);
-      } else {
-        btn.textContent = '▶ Start Auto Agent';
-        btn.className = 'btn btn-success';
-        clearInterval(autoAgentTimer);
-        showToast('Autonomous Trading Agent Stopped');
-        logStream('[Auto Agent] Agent stopped.');
-      }
-    }
-
-    function updateAutoInterval() {
-      if (autoAgentActive) {
-        clearInterval(autoAgentTimer);
-        const sec = parseInt(document.getElementById('auto-interval-select').value) || 30;
-        autoAgentTimer = setInterval(runAutoCycle, sec * 1000);
-      }
-    }
-
-    async function runAutoCycle() {
-      const tickers = ['TSLA', 'AMZN', 'MSFT', 'NFLX', 'COIN'];
-      const targetTk = tickers[Math.floor(Math.random() * tickers.length)];
-      logStream(`[Auto Agent] Evaluating ${targetTk} under ${currentRiskProfile.toUpperCase()} risk profile...`);
-
-      try {
-        const res = await fetch('/api/ai_trade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticker: targetTk, risk_mode: currentRiskProfile })
-        });
-        const data = await res.json();
-        if (data.success) {
-          logStream(`[Decision: ${data.action}] ${targetTk} via ${data.provider.toUpperCase()} (${data.model})\nReason: ${data.reasoning}\n`);
-          fetchPortfolio();
-        }
-      } catch (err) {
-        logStream(`[Auto Agent] Failover error: ${err.message}`);
-      }
-    }
-
-    function logStream(msg) {
-      const c = document.getElementById('auto-agent-console');
-      const time = new Date().toLocaleTimeString();
-      c.textContent = `[${time}] ${msg}\n` + c.textContent.slice(0, 3000);
-    }
-
-    /* Portfolio & Positions */
-    async function fetchPortfolio() {
-      try {
-        const res = await fetch('/api/portfolio');
-        portfolioData = await res.json();
-
-        // Terminal Tab KPIs
-        document.getElementById('term-kpi-equity').textContent = `$${portfolioData.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        document.getElementById('term-kpi-equity-sub').textContent = `Cash: $${portfolioData.cash.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        document.getElementById('term-kpi-positions').textContent = portfolioData.positions.length;
-        document.getElementById('term-kpi-unrealized').textContent = `Unrealized: ${portfolioData.unrealized_pnl >= 0 ? '+' : ''}$${portfolioData.unrealized_pnl.toFixed(2)}`;
-        const modePill = document.getElementById('execution-mode-pill');
-        if (modePill) modePill.textContent = portfolioData.execution_mode === 'alpaca_paper' ? 'ALPACA PAPER EXECUTION' : 'LOCAL PAPER SIMULATION';
-        renderLiveTradeTape();
-        renderSelectedPosition();
-        renderRiskCockpit();
-        const labQuote = document.getElementById('trade-lab-quote');
-        if (labQuote) labQuote.textContent = `$${(latestPrices[currentTicker] || 0).toFixed(2)}`;
-
-        // Portfolio Tab KPIs
-        document.getElementById('port-equity').textContent = `$${portfolioData.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        document.getElementById('port-cash').textContent = `$${portfolioData.cash.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        document.getElementById('port-unrealized').textContent = `${portfolioData.unrealized_pnl >= 0 ? '+' : ''}$${portfolioData.unrealized_pnl.toFixed(2)}`;
-        document.getElementById('port-unrealized-pct').textContent = `${portfolioData.total_pnl_pct >= 0 ? '+' : ''}${portfolioData.total_pnl_pct.toFixed(2)}% Total Return`;
-        document.getElementById('port-realized').textContent = `${portfolioData.realized_pnl >= 0 ? '+' : ''}$${portfolioData.realized_pnl.toFixed(2)}`;
-
-        renderPositionsTable();
-        renderOrdersTable();
-      } catch (err) {
-        console.error("Failed to load portfolio", err);
-      }
-    }
-
-    function renderRiskCockpit() {
-      const risk = portfolioData?.risk;
-      if (!risk) return;
-      const pnl = document.getElementById('risk-daily-pnl');
-      const guard = document.getElementById('risk-guard-status');
-      pnl.textContent = `${risk.daily_pnl >= 0 ? '+' : ''}$${risk.daily_pnl.toFixed(2)}`;
-      pnl.style.color = risk.daily_pnl >= 0 ? 'var(--green)' : 'var(--red)';
-      document.getElementById('risk-daily-pnl-limit').textContent = `Limit: -$${risk.daily_loss_limit.toFixed(2)}`;
-      document.getElementById('risk-largest-position').textContent = `${risk.largest_position_pct.toFixed(2)}%`;
-      document.getElementById('risk-position-limit').textContent = `Limit: ${risk.max_position_pct.toFixed(2)}%`;
-      const guardTriggered = risk.daily_pnl < -risk.daily_loss_limit;
-      guard.textContent = guardTriggered ? 'BUY PAUSED' : 'ARMED';
-      guard.style.color = guardTriggered ? 'var(--red)' : 'var(--green)';
-      document.getElementById('risk-day-label').textContent = `UTC day: ${risk.daily_start_date}`;
-    }
-
-    function renderSelectedPosition() {
-      const position = [
-        ...(portfolioData?.positions || []),
-        ...(portfolioData?.alpaca_positions || [])
-      ].find(p => p.ticker === currentTicker);
-      document.getElementById('pos-banner-ticker').textContent = currentTicker;
-      document.querySelectorAll('.tk-label').forEach(el => { el.textContent = currentTicker; });
-      const details = document.getElementById('pos-banner-details');
-      const empty = document.getElementById('pos-banner-empty');
-      if (!position) {
-        details.style.display = 'none';
-        empty.style.display = 'block';
-        document.getElementById('pos-banner-status').textContent = 'FLAT (NO POSITION)';
-        return;
-      }
-
-      details.style.display = 'flex';
-      empty.style.display = 'none';
-      document.getElementById('pos-banner-status').textContent = `${position.side.toUpperCase()} • LIVE MARK $${position.current_price.toFixed(2)}`;
-      const pnlColor = position.unrealized_pnl >= 0 ? 'var(--green)' : 'var(--red)';
-      const pnlSign = position.unrealized_pnl >= 0 ? '+' : '';
-      const pnl = document.getElementById('pos-banner-pnl');
-      pnl.textContent = `${pnlSign}$${position.unrealized_pnl.toFixed(2)} (${pnlSign}${position.unrealized_pnl_pct.toFixed(2)}%)`;
-      pnl.style.color = pnlColor;
-      document.getElementById('pos-banner-val').textContent = `$${position.current_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-      document.getElementById('pos-banner-shares').textContent = position.shares;
-      document.getElementById('pos-banner-avg').textContent = `$${position.avg_price.toFixed(2)}`;
-      document.getElementById('pos-banner-cost').textContent = `$${position.invested_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
-    }
-
-    function renderLiveTradeTape() {
-      const tape = document.getElementById('live-trade-tape');
-      if (!tape) return;
-      const orders = (portfolioData?.recent_orders || []).filter(order => order.status === 'filled' || order.action || order.decision).slice(0, 12);
-      if (!orders.length) {
-        tape.innerHTML = '<div class="tape-empty">Waiting for the first filled order...</div>';
-        return;
-      }
-      tape.innerHTML = orders.map((order, index) => {
-        const action = order.action || order.decision || 'Hold';
-        const source = order.is_ai ? `AI / ${order.provider || 'agent'}` : 'Manual';
-        const time = order.timestamp ? new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--';
-        const color = action.toLowerCase() === 'buy' ? 'var(--green)' : action.toLowerCase() === 'sell' ? 'var(--red)' : 'var(--yellow)';
-        return `<div class="live-tape-row ${index === 0 ? 'latest' : ''}">
-          <span class="live-tape-time">${escapeHtml(time)}</span>
-          <span class="live-tape-symbol">${escapeHtml(order.ticker)}</span>
-          <span class="live-tape-meta"><strong style="color: ${color};">${escapeHtml(action)}</strong> · ${escapeHtml(source)} · ${escapeHtml(order.status || 'recorded')}</span>
-          <span style="font-weight: 700; color: #fff;">${order.shares ? escapeHtml(order.shares) : '--'} sh</span>
-        </div>`;
-      }).join('');
-    }
-
-    function renderPositionsTable() {
-      const tbody = document.querySelector('#positions-table tbody');
-      tbody.innerHTML = '';
-      const positions = portfolioData?.execution_mode === 'alpaca_paper'
-        ? (portfolioData?.positions || [])
-        : [...(portfolioData?.positions || []), ...(portfolioData?.alpaca_positions || [])];
-      if (!positions.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No open positions in portfolio.</td></tr>';
-        return;
-      }
-
-      positions.forEach(p => {
-        const tr = document.createElement('tr');
-        const pnlCol = p.unrealized_pnl >= 0 ? 'var(--green)' : 'var(--red)';
-        const source = p.broker_position ? 'Alpaca paper' : 'Dashboard paper';
-        const action = `<button class="btn btn-danger" style="padding: 0.2rem 0.6rem; font-size: 0.72rem;" onclick="closePosition('${p.ticker}')">Close</button>`;
-        tr.innerHTML = `
-          <td style="font-weight: 700;">${p.ticker}</td>
-          <td><span class="badge badge-${p.side.toLowerCase()}">${p.side}</span><div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.2rem;">${source}</div></td>
-          <td>${p.shares}</td>
-          <td>$${p.avg_price.toFixed(2)}</td>
-          <td>$${p.current_price.toFixed(2)}</td>
-          <td>$${p.current_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-          <td style="color: ${pnlCol}; font-weight: 700;">${p.unrealized_pnl >= 0 ? '+' : ''}$${p.unrealized_pnl.toFixed(2)}</td>
-          <td style="color: ${pnlCol};">${p.unrealized_pnl_pct >= 0 ? '+' : ''}${p.unrealized_pnl_pct.toFixed(2)}%</td>
-          <td>${action}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function renderOrdersTable() {
-      const tbody = document.querySelector('#orders-table tbody');
-      tbody.innerHTML = '';
-      if (!portfolioData || !portfolioData.recent_orders || portfolioData.recent_orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No orders recorded yet.</td></tr>';
-        return;
-      }
-
-      portfolioData.recent_orders.forEach(o => {
-        const tr = document.createElement('tr');
-        const act = o.decision || o.action || 'Hold';
-        const d = o.timestamp ? new Date(o.timestamp).toLocaleString() : '--';
-        tr.innerHTML = `
-          <td style="color: var(--text-dim); font-size: 0.75rem;">${d}</td>
-          <td style="font-weight: 700;">${o.ticker}</td>
-          <td><span class="badge badge-${act.toLowerCase()}">${act}</span></td>
-          <td>${o.shares || '--'}</td>
-          <td>$${o.price ? o.price.toFixed(2) : '--'}</td>
-          <td>$${o.notional ? o.notional.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '--'}</td>
-          <td>${o.order_type || o.status || 'Market'}</td>
-          <td style="color: #a78bfa;">${o.is_ai ? 'AI (' + (o.provider || 'Groq') + ')' : 'Manual'}</td>
-          <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${o.reasoning || '--'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    async function closePosition(tk) {
-      if (!confirm(`Close the entire Alpaca Paper position in ${tk}?`)) return;
-      try {
-        const res = await fetch('/api/close_position', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticker: tk })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(`Alpaca Paper position in ${tk} close order submitted.`);
-          fetchPortfolio();
-        } else {
-          showToast(`Close failed: ${data.error || 'Unknown Alpaca error'}`, true);
-        }
-      } catch (err) {
-        showToast('Failed to close position', true);
-      }
-    }
-
-    async function resetPortfolioAccount() {
-      if (!confirm("Reset Paper Trading portfolio to initial $100,000 cash?")) return;
-      try {
-        await fetch('/api/reset_portfolio', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initial_capital: 100000.0 })
-        });
-        showToast('Portfolio reset successfully.');
-        fetchPortfolio();
-      } catch (err) {
-        showToast('Failed to reset account', true);
-      }
-    }
-
-    function exportOrdersCSV() {
-      if (!portfolioData || !portfolioData.recent_orders) return;
-      let csv = "timestamp,ticker,action,shares,price,notional,type,source,reasoning\n";
-      portfolioData.recent_orders.forEach(o => {
-        csv += `"${o.timestamp}","${o.ticker}","${o.action || o.decision}","${o.shares}","${o.price}","${o.notional}","${o.order_type}","${o.is_ai ? 'AI' : 'Manual'}","${(o.reasoning || '').replace(/"/g, '""')}"\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `orders_export_${Date.now()}.csv`;
-      a.click();
-    }
-
-    function saveHarnessSettings() {
-      const cap = parseFloat(document.getElementById('set-capital').value) || 100000;
-      const risk = document.getElementById('set-risk').value;
-      const prov = document.getElementById('set-provider').value;
-      fetch('/api/update_settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initial_capital: cap,
-          risk_profile: risk,
-          provider: prov
-        })
-      });
-      showToast('Settings Saved Successfully.');
-    }
-
-    window.addEventListener('resize', () => {
-      if (currentTab === 'terminal') drawTerminalChart();
-    });
-  </script>
-  <script src="/app.js"></script>
+    </header>
+    <div id="alerts" aria-live="polite"></div>
+
+    <main>
+      <!-- ============================================================ HOME -->
+      <section class="page" id="page-home">
+        <div class="hero">
+          <div class="card hero-card">
+            <div class="row between">
+              <div class="section-title" style="color:rgba(255,255,255,.8)" data-i18n="home.total">Total account value</div>
+              <span class="chip" id="home-mode" style="background:rgba(255,255,255,.18);color:#fff"></span>
+            </div>
+            <div class="hero-value" id="home-equity">–</div>
+            <div id="home-today" class="muted"></div>
+            <div class="stats">
+              <div class="stat"><span class="k" data-i18n="home.cash">Cash</span><span class="v" id="home-cash">–</span></div>
+              <div class="stat"><span class="k" data-i18n="home.invested">Invested</span><span class="v" id="home-invested">–</span></div>
+              <div class="stat"><span class="k" data-i18n="home.profit">Open profit / loss</span><span class="v" id="home-upnl">–</span></div>
+              <div class="stat"><span class="k" data-i18n="home.positions">Stocks held</span><span class="v" id="home-npos">–</span></div>
+            </div>
+          </div>
+          <div class="card" id="home-pilot-card">
+            <div class="card-header">
+              <div><div class="card-title">🤖 <span data-i18n="home.pilot">AI Autopilot</span></div>
+              <div class="card-subtitle" id="home-pilot-sub"></div></div>
+              <button class="btn btn-secondary btn-sm" onclick="App.go('autopilot')" data-i18n="common.open">Open</button>
+            </div>
+            <div id="home-pilot-body"></div>
+          </div>
+        </div>
+
+        <div class="card" id="home-setup" hidden>
+          <div class="card-header"><div><div class="card-title">🚀 <span data-i18n="setup.title">Get started in 3 steps</span></div>
+            <div class="card-subtitle" data-i18n="setup.sub">Everything runs on a paper (practice) account, so no real money is at risk.</div></div>
+            <button class="btn btn-ghost btn-sm" onclick="Trade.hideSetup()" data-i18n="setup.hide">Hide</button></div>
+          <div class="steps" id="home-steps"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">🧭 <span data-i18n="home.view">AI view on</span> <span class="tk-label">TSLA</span></div>
+              <div class="card-subtitle" data-i18n="home.view.sub">What our research agent thinks today, in plain words.</div></div>
+              <button class="btn btn-secondary btn-sm" onclick="App.go('trade')" data-i18n="home.gotrade">Trade this stock</button>
+            </div>
+            <div id="home-view"><div class="muted" data-i18n="common.loading">Loading…</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">🛡️ <span data-i18n="home.safety">Budget &amp; safety</span></div>
+              <div class="card-subtitle" data-i18n="home.safety.sub">Limits the AI must respect. Change them in Settings.</div></div>
+              <button class="btn btn-secondary btn-sm" onclick="Autopilot.openSettings('budget')" data-i18n="common.edit">Edit</button></div>
+            <div id="home-limits" class="col" style="gap:.8rem"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">🕒 <span data-i18n="home.activity">Recent activity</span></div>
+            <div class="card-subtitle" data-i18n="home.activity.sub">Latest orders and AI decisions.</div></div>
+            <button class="btn btn-secondary btn-sm" onclick="App.go('portfolio')" data-i18n="home.allorders">All orders</button></div>
+          <div class="activity" id="home-activity"></div>
+        </div>
+      </section>
+
+      <!-- ============================================================ TRADE -->
+      <section class="page" id="page-trade">
+        <div class="card">
+          <div class="quote-head">
+            <div>
+              <div class="dim" id="trade-company"></div>
+              <div class="row" style="align-items:baseline;gap:.8rem">
+                <span class="tk tk-label">TSLA</span><span class="px num" id="trade-price">–</span><span class="chg num" id="trade-change"></span>
+              </div>
+            </div>
+            <div class="spacer"></div>
+            <div class="dim" id="trade-source"></div>
+            <button class="btn btn-secondary btn-sm" onclick="Trade.load()">⟳ <span data-i18n="common.refresh">Refresh</span></button>
+          </div>
+        </div>
+
+        <div class="grid-main">
+          <div class="col">
+            <div class="card">
+              <div class="card-header">
+                <div><div class="card-title">📉 <span data-i18n="trade.chart">Price chart</span></div>
+                <div class="card-subtitle" data-i18n="trade.chart.sub">Daily prices with optional trend lines and indicators.</div></div>
+                <div class="legend" id="chart-toggles">
+                  <label><input type="checkbox" id="chk-candles" checked> <span data-i18n="trade.candles">Candles</span></label>
+                  <label><input type="checkbox" id="chk-sma20" checked> <i class="swatch" style="background:var(--cyan)"></i> <span data-i18n="trade.sma20">20-day avg</span></label>
+                  <label><input type="checkbox" id="chk-sma50" checked> <i class="swatch" style="background:var(--purple)"></i> <span data-i18n="trade.sma50">50-day avg</span></label>
+                  <label><input type="checkbox" id="chk-bb"> <i class="swatch" style="background:var(--primary)"></i> <span data-i18n="trade.bands">Volatility bands</span></label>
+                  <label><input type="checkbox" id="chk-rsi"> RSI</label>
+                  <label><input type="checkbox" id="chk-macd"> MACD</label>
+                </div>
+              </div>
+              <div class="chart" id="trade-chart"></div>
+              <div id="rsi-panel" hidden><div class="subchart-title" data-i18n="trade.rsi.title">RSI (14) · above 70 = overheated, below 30 = oversold</div><div class="chart" id="trade-rsi"></div></div>
+              <div id="macd-panel" hidden><div class="subchart-title" data-i18n="trade.macd.title">MACD (12, 26, 9) · momentum</div><div class="chart" id="trade-macd"></div></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">💼 <span data-i18n="trade.position">Your position</span></div><span id="pos-status"></span></div>
+              <div id="pos-body"></div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">🎯 <span data-i18n="trade.signals">Chart signals</span>
+                <span class="help" data-i18n-title="trade.signals.help">?</span></div>
+                <div class="card-subtitle" data-i18n="trade.signals.sub">Four classic indicators combined into one score.</div></div>
+                <span id="trade-rec"></span></div>
+              <div class="score-bar"><i id="trade-score-dot" style="left:50%"></i></div>
+              <div class="row between dim"><span data-i18n="trade.bearish">Bearish</span><span id="trade-score-text"></span><span data-i18n="trade.bullish">Bullish</span></div>
+              <div class="sig-grid" id="trade-sigs"></div>
+            </div>
+
+            <div class="card accent">
+              <div class="card-header"><div><div class="card-title">🤖 <span data-i18n="trade.ai">Ask the AI agent</span></div>
+                <div class="card-subtitle" data-i18n="trade.ai.sub">Reads news memory and price data, decides, and trades within your budget limits.</div></div></div>
+              <button class="btn btn-ai btn-lg" id="btn-run-ai" onclick="Trade.runAI()">⚡ <span data-i18n="trade.ai.run">Get AI decision &amp; trade</span></button>
+              <div id="ai-result" hidden></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><div class="card-title">🧾 <span data-i18n="trade.order">Place an order</span></div>
+                <span class="dim" data-i18n="trade.market">Market order</span></div>
+              <div class="toggle2">
+                <button class="buy active" id="ord-buy" onclick="Trade.setSide('Buy')" data-i18n="act.buy">Buy</button>
+                <button class="sell" id="ord-sell" onclick="Trade.setSide('Sell')" data-i18n="act.sell">Sell</button>
+              </div>
+              <div class="row between">
+                <span class="field-label" data-i18n="trade.amount">Amount</span>
+                <div class="seg small"><button id="unit-usd" class="active" onclick="Trade.setUnit('usd')">$</button><button id="unit-sh" onclick="Trade.setUnit('shares')" data-i18n="trade.shares">Shares</button></div>
+              </div>
+              <div class="input-affix pre"><span id="ord-affix">$</span><input type="number" id="ord-amount" min="0" step="any" value="1000" oninput="Trade.updateTicket()"></div>
+              <div class="preset-row" id="ord-presets"></div>
+              <div class="summary-line"><span id="ord-summary-k" data-i18n="trade.est">Estimated</span><b class="num" id="ord-summary">–</b></div>
+              <button class="btn btn-success btn-lg" id="ord-submit" onclick="Trade.submit()"></button>
+              <div class="dim" data-i18n="trade.paper">Paper trading: practice money only.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ PORTFOLIO -->
+      <section class="page" id="page-portfolio">
+        <div class="kpi-grid" id="port-kpis"></div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">📊 <span data-i18n="port.positions">Open positions</span></div>
+            <div class="card-subtitle" data-i18n="port.positions.sub">Stocks you currently own, valued at the latest price.</div></div>
+            <button class="btn btn-secondary btn-sm" onclick="Trade.fetchPortfolio()">⟳ <span data-i18n="common.refresh">Refresh</span></button></div>
+          <div class="table-container"><table class="tbl" id="positions-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">📜 <span data-i18n="port.orders">Order history</span></div>
+            <div class="card-subtitle" data-i18n="port.orders.sub">Every manual and AI order, newest first.</div></div>
+            <div class="row">
+              <button class="btn btn-secondary btn-sm" onclick="Trade.exportCSV()">⬇ <span data-i18n="port.export">Export CSV</span></button>
+              <button class="btn btn-secondary btn-sm" id="btn-reset" onclick="Trade.resetAccount()" hidden data-i18n="port.reset">Reset practice account</button>
+            </div></div>
+          <div class="table-container"><table class="tbl" id="orders-table"></table></div>
+        </div>
+      </section>
+
+      <!-- ============================================================ AUTOPILOT -->
+      <section class="page" id="page-autopilot">
+        <div class="card">
+          <div class="pilot-hero">
+            <div class="pilot-state">
+              <div class="pilot-orb" id="ap-orb">⏸</div>
+              <div><h2 id="ap-state">–</h2><div class="muted" id="ap-state-sub"></div></div>
+            </div>
+            <div class="row">
+              <button class="btn btn-success" id="ap-toggle" onclick="Autopilot.toggle()"></button>
+              <button class="btn btn-secondary" id="ap-once" onclick="Autopilot.runOnce()">▶ <span data-i18n="ap.once">Run one check now</span></button>
+              <button class="btn btn-danger" id="ap-kill" onclick="Autopilot.kill()">🛑 <span data-i18n="ap.kill">Emergency stop</span></button>
+              <button class="btn btn-secondary" id="ap-resume" onclick="Autopilot.resume()" hidden data-i18n="ap.resume">Resume trading</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">🛡️ <span data-i18n="ap.limits">Safety limits right now</span></div>
+            <div class="card-subtitle" data-i18n="ap.limits.sub">Hard limits apply in every mode, even to orders you approve.</div></div>
+            <button class="btn btn-secondary btn-sm" onclick="Autopilot.openSettings('budget')" data-i18n="ap.editbudget">Edit budget &amp; limits</button></div>
+          <div class="limits" id="ap-limits"></div>
+        </div>
+
+        <div class="card" id="ap-queue-card">
+          <div class="card-header"><div><div class="card-title">✋ <span data-i18n="ap.queue">Waiting for your approval</span></div>
+            <div class="card-subtitle" data-i18n="ap.queue.sub">Each order is re-checked against your limits at the moment you approve it.</div></div>
+            <div class="row" id="ap-queue-bulk"></div></div>
+          <div class="col" style="gap:.6rem" id="ap-queue"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">🔐 <span data-i18n="ap.perm">How much freedom does the AI get?</span></div>
+            <div class="card-subtitle" data-i18n="ap.perm.sub">Pick the permission level you are comfortable with.</div></div></div>
+          <div class="option-cards" id="ap-perm"></div>
+          <div class="form-grid" id="ap-guarded"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">🧠 <span data-i18n="ap.decide">How does it decide?</span></div>
+              <div class="card-subtitle" data-i18n="ap.decide.sub">Who makes the Buy / Sell / Hold call.</div></div></div>
+            <div class="option-cards" id="ap-decision" style="grid-template-columns:1fr"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">⏱️ <span data-i18n="ap.schedule">When and how much?</span></div>
+              <div class="card-subtitle" data-i18n="ap.schedule.sub">How often it checks and how it sizes each buy.</div></div></div>
+            <div class="form-grid" id="ap-schedule"></div>
+          </div>
+        </div>
+        <div class="row"><button class="btn btn-lg" onclick="Autopilot.saveConfig()">💾 <span data-i18n="ap.save">Save autopilot settings</span></button>
+          <span class="dim" id="ap-save-note"></span></div>
+
+        <div class="card">
+          <div class="card-header"><div><div class="card-title">📒 <span data-i18n="ap.log">Activity log</span></div>
+            <div class="card-subtitle" data-i18n="ap.log.sub">Every decision the autopilot made and what happened to it.</div></div></div>
+          <div class="log" id="ap-log"></div>
+        </div>
+      </section>
+
+      <!-- ============================================================ INSIGHTS -->
+      <section class="page" id="page-insights">
+        <div class="subnav"><div class="seg" id="in-tabs">
+          <button data-panel="split" class="active" data-i18n="in.split">Budget split</button>
+          <button data-panel="pattern" data-i18n="in.pattern">Pattern finder</button>
+          <button data-panel="whatif" data-i18n="in.whatif">What-if</button>
+          <button data-panel="risk" data-i18n="in.risk">Risk</button>
+          <button data-panel="corr" data-i18n="in.corr">Correlation</button>
+          <button data-panel="algo" data-i18n="in.algo">Algorithms</button>
+        </div></div>
+
+        <!-- budget split -->
+        <div class="panel active" id="panel-split">
+          <div class="page-intro" data-i18n="split.intro">How much of your budget should go into each stock? Pick a method; the plan respects your cash reserve and per-stock limit from Settings.</div>
+          <div class="option-cards" id="split-methods"></div>
+          <div class="grid-main">
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">🥧 <span data-i18n="split.plan">Suggested split</span></div>
+                <div class="card-subtitle" id="split-sub"></div></div>
+                <div class="seg small" id="split-lookback"><button data-v="60">60d</button><button data-v="120" class="active">120d</button><button data-v="250">1y</button></div></div>
+              <div class="an-alloc">
+                <div class="an-donut-wrap"><div id="split-donut"></div><div class="an-donut-center" id="split-center"></div></div>
+                <div class="table-container" style="flex:1;min-width:0"><table class="tbl" id="split-table"></table></div>
+              </div>
+              <div class="row">
+                <button class="btn" id="split-rebalance" onclick="AnalyticsApp.rebalance()">📤 <span data-i18n="split.rebalance">Send rebalance to approval queue</span></button>
+                <button class="btn btn-secondary" onclick="AnalyticsApp.useForAutopilot()" data-i18n="split.use">Use this split for the autopilot</button>
+              </div>
+            </div>
+            <div class="col">
+              <div class="card"><div class="card-title">📐 <span data-i18n="split.stats">About this plan</span></div><div class="stats" id="split-stats"></div></div>
+              <div class="card"><div class="card-title">💡 <span data-i18n="split.how">How the methods work</span></div><div class="muted" id="split-explain" style="font-size:.86rem"></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">⏮️ <span data-i18n="split.bt">How each method did over the past year</span></div>
+              <div class="card-subtitle" id="split-bt-sub"></div></div></div>
+            <div class="chart" id="split-bt-chart"></div>
+            <div class="table-container"><table class="tbl" id="split-bt-table"></table></div>
+          </div>
+        </div>
+
+        <!-- pattern finder -->
+        <div class="panel" id="panel-pattern">
+          <div class="page-intro" data-i18n="pat.intro">Has the current chart shape happened before? We search past price history for the most similar moments and show what happened next.</div>
+          <div class="card">
+            <div class="form-grid">
+              <div class="field"><label data-i18n="pat.window">Pattern length</label>
+                <select id="an-window"><option value="10">10</option><option value="20" selected>20</option><option value="40">40</option><option value="60">60</option></select></div>
+              <div class="field"><label data-i18n="pat.horizon">Look ahead (days)</label>
+                <select id="an-horizon"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select></div>
+              <div class="field"><label data-i18n="pat.k">Matches</label>
+                <select id="an-k"><option>5</option><option selected>8</option><option>12</option><option>20</option></select></div>
+              <div class="field"><label data-i18n="pat.scope">Search in</label>
+                <div class="seg small" id="an-scope"><button data-v="ticker" class="active" data-i18n="pat.this">This stock</button><button data-v="universe" data-i18n="pat.all">All 10 stocks</button></div></div>
+              <div class="field"><label data-i18n="pat.threshold">Min. expected move (%)</label>
+                <input type="number" id="an-threshold" value="1" min="0" max="20" step="0.25"></div>
+              <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="an-longonly"> <span data-i18n="pat.longonly">Buy-only (no short selling)</span></label></div>
+            </div>
+            <div class="row"><button class="btn" id="an-run" onclick="AnalyticsApp.runPattern()">🔍 <span data-i18n="pat.run">Find similar past charts</span></button><span class="dim" id="an-status"></span></div>
+          </div>
+          <div class="kpi-grid" id="an-kpis"></div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">🔁 <span data-i18n="pat.overlay">Then vs. now</span></div>
+              <div class="card-subtitle" data-i18n="pat.overlay.sub">Bold line: the latest pattern. Thin lines: similar past moments, green if price rose afterwards, red if it fell.</div></div>
+              <button class="btn btn-success btn-sm" id="an-exec" onclick="AnalyticsApp.executeVerdict()" disabled></button></div>
+            <div class="chart" id="an-overlay"></div>
+            <div class="table-container"><table class="tbl" id="an-matches"></table></div>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">📈 <span data-i18n="pat.bt">If you had followed it every day</span></div>
+                <div class="card-subtitle" id="an-bt-note"></div></div></div>
+              <div class="chart" id="an-bt-chart"></div>
+              <div class="table-container"><table class="tbl" id="an-bt-table"></table></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">🧪 <span data-i18n="pat.grid">Robustness check</span></div>
+                <div class="card-subtitle" data-i18n="pat.grid.sub">Same idea, every pattern length × look-ahead. One lucky cell is not proof.</div></div>
+                <button class="btn btn-secondary btn-sm" id="an-sweep-btn" onclick="AnalyticsApp.runSweep()" data-i18n="pat.rerun">Re-run</button></div>
+              <div id="an-sweep" class="table-container"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- what-if -->
+        <div class="panel" id="panel-whatif">
+          <div class="page-intro" data-i18n="wi.intro">Where your money is today, and where it could be in the future based on how these stocks have moved in the past.</div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">🥧 <span data-i18n="wi.alloc">Where your money is</span></div>
+                <div class="card-subtitle" id="an-alloc-basis"></div></div></div>
+              <div class="an-alloc">
+                <div class="an-donut-wrap"><div id="an-donut"></div><div class="an-donut-center" id="an-donut-center"></div></div>
+                <div class="table-container" style="flex:1;min-width:0"><table class="tbl" id="an-alloc-table"></table></div>
+              </div>
+              <div class="an-tiles" id="an-risk-tiles"></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">🎲 <span data-i18n="wi.future">Possible futures</span></div>
+                <div class="card-subtitle" id="an-mc-note"></div></div>
+                <div class="seg small" id="an-days"><button data-v="5" data-i18n="wi.1w">1W</button><button data-v="21" class="active" data-i18n="wi.1m">1M</button><button data-v="63" data-i18n="wi.3m">3M</button></div></div>
+              <div class="chart" id="an-fan"></div>
+              <div class="chart" id="an-mc-hist"></div>
+              <div class="an-tiles" id="an-mc-kpis"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- risk -->
+        <div class="panel" id="panel-risk">
+          <div class="page-intro" data-i18n="risk.intro">How bumpy has this stock been? Daily ups and downs, worst days and the deepest fall from a high.</div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header"><div><div class="card-title" id="an-risk-title"></div>
+                <div class="card-subtitle" data-i18n="risk.hist.sub">Bars: real days. Dashed line: what a "normal" bell curve would expect; bars beyond it are surprise moves.</div></div></div>
+              <div class="chart" id="an-ret-hist"></div>
+              <div class="an-tiles" id="an-ret-stats"></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">📉 <span data-i18n="risk.dd">Fall from the highest point</span></div>
+                <div class="card-subtitle" data-i18n="risk.dd.sub">How far below its previous peak the stock was on each day.</div></div></div>
+              <div class="chart" id="an-dd"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- algorithms + reinforcement learning -->
+        <div class="panel" id="panel-algo">
+          <div class="page-intro" data-i18n="algo.intro">Twelve algorithms from our research study, from simple rules to machine learning and news memory, plus a reinforcement-learning agent. See what each says today and how it actually did when it had to decide without seeing the future.</div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">🗳️ <span id="algo-title"></span></div>
+              <div class="card-subtitle" id="algo-sub"></div></div><div id="algo-votes" class="row"></div></div>
+            <div class="table-container"><table class="tbl ra-clickable" id="algo-table"></table></div>
+            <div class="alert info" id="algo-source"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">📚 <span id="exp-title"></span></div>
+              <div class="card-subtitle" data-i18n="exp.sub">Every decision this algorithm made, the price move that followed, and whether it was right. Click another row above to switch.</div></div></div>
+            <div class="grid-main">
+              <div class="chart" id="exp-chart"></div>
+              <div class="stats" id="exp-stats"></div>
+            </div>
+            <div class="table-container" style="max-height:420px;overflow-y:auto"><table class="tbl" id="exp-log"></table></div>
+          </div>
+          <div class="card accent">
+            <div class="card-header"><div><div class="card-title">🎮 <span data-i18n="rl.title">Reinforcement learning agent (Q-learning)</span></div>
+              <div class="card-subtitle" data-i18n="rl.sub">An agent that learns by trial and error which action pays off in which market situation, instead of following fixed rules.</div></div>
+              <div class="row"><span class="field-label" data-i18n="rl.epochs">Training passes</span>
+                <select id="qrl-epochs"><option>10</option><option selected>30</option><option>100</option></select>
+                <button class="btn btn-sm" onclick="AnalyticsApp.trainRL()">🔁 <span data-i18n="rl.train">Retrain</span></button></div></div>
+            <div class="option-cards" id="qrl-steps"></div>
+            <div class="kpi-grid" id="qrl-kpis"></div>
+            <div class="grid-2">
+              <div><div class="section-title" data-i18n="rl.curve">Learning curve (training)</div><div class="chart" id="qrl-curve"></div><div class="dim" data-i18n="rl.curve.sub">Average reward per decision in each training pass.</div></div>
+              <div><div class="section-title" data-i18n="rl.test">Test: agent vs. buy &amp; hold</div><div class="chart" id="qrl-equity"></div><div class="dim" id="qrl-test-note"></div></div>
+            </div>
+            <div class="col">
+              <div><div class="section-title" data-i18n="rl.qtable">What it learned (Q-table)</div>
+                <div class="dim" data-i18n="rl.qtable.sub">Each row is a market situation. Q = expected reward of each action; the higher one is chosen. ★ = today's situation.</div>
+                <div class="table-container" style="max-height:420px;overflow-y:auto"><table class="tbl" id="qrl-qtable"></table></div></div>
+              <div><div class="section-title" data-i18n="rl.replay">Experience data (last decisions)</div>
+                <div class="dim" id="qrl-exp-note"></div>
+                <div class="table-container" style="max-height:420px;overflow-y:auto"><table class="tbl" id="qrl-replay"></table></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- correlation -->
+        <div class="panel" id="panel-corr">
+          <div class="page-intro" data-i18n="corr.intro">Do these stocks move together? Pairs near 1 rise and fall together (less diversification); pairs near 0 or below spread your risk.</div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">🧩 <span data-i18n="corr.title">Correlation of daily returns</span></div>
+              <div class="card-subtitle" id="an-corr-note"></div></div>
+              <div class="seg small" id="an-corr-lookback"><button data-v="60">60d</button><button data-v="120" class="active">120d</button><button data-v="0" data-i18n="corr.all">All</button></div></div>
+            <div id="an-corr" class="table-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ SCANNER -->
+      <section class="page" id="page-scanner">
+        <div class="toolbar">
+          <div class="page-intro" data-i18n="sc.intro">All ten stocks at a glance. The recommendation only says Buy or Sell when our memory agent and the price model agree. Tap a row for details.</div>
+          <div class="toolbar-group">
+            <span class="dim" id="sc-date"></span>
+            <button class="btn btn-secondary" onclick="ResearchApp.loadScanner()">⟳ <span data-i18n="sc.rescan">Rescan</span></button>
+            <button class="btn" onclick="ResearchApp.executeAll()" data-i18n="sc.execall">Trade all recommendations</button>
+          </div>
+        </div>
+        <div class="card"><div class="table-container"><table class="ra-table ra-clickable" id="sc-table"></table></div></div>
+      </section>
+
+      <!-- ============================================================ MEMORY AGENT -->
+      <section class="page" id="page-agent">
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <span class="control-label" data-i18n="ag.backbone">AI model</span>
+            <select id="ag-backbone"></select>
+            <button class="btn btn-ai" id="ag-ask" onclick="ResearchApp.askLLM()">🧠 <span data-i18n="ag.ask">Ask the AI</span></button>
+            <button class="btn btn-success" id="ag-run" onclick="ResearchApp.runAgent()">⚡ <span data-i18n="ag.run">Decide &amp; trade</span></button>
+          </div>
+          <div class="toolbar-group">
+            <span class="dim" id="ag-status"></span>
+            <button class="btn btn-secondary" id="ag-refresh" onclick="ResearchApp.refreshData()"></button>
+          </div>
+        </div>
+        <div class="ra-job" id="ag-job" hidden></div>
+        <div class="kpi-grid" id="ag-kpis"></div>
+        <div class="ra-grid-2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title" data-i18n="ag.mem">What the agent remembers</div>
+              <div class="card-subtitle" data-i18n="ag.mem.sub">News and filings it retrieved, by memory layer, with credibility and how many sources agree.</div></div></div>
+            <div id="ag-memories" class="ra-memories"></div>
+          </div>
+          <div class="ra-col">
+            <div class="card">
+              <div class="card-header"><div class="card-title" data-i18n="ag.rec">Recommendation</div><span id="ag-consensus-badge"></span></div>
+              <ul id="ag-reasons" class="ra-reasons"></ul>
+              <div id="ag-llm" class="ra-llm" hidden></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div><div class="card-title" data-i18n="ag.systems">Memory designs compared today</div>
+                <div class="card-subtitle" data-i18n="ag.systems.sub">Same data, only the memory differs.</div></div></div>
+              <div class="table-container"><table class="ra-table" id="ag-systems"></table></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title" data-i18n="ag.history">Price and memory signal, last 90 days</div></div>
+              <div id="ag-history"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ RESEARCH LAB -->
+      <section class="page" id="page-research">
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <span class="control-label" data-i18n="rl.protocol">Test method</span>
+            <div class="ra-seg" id="rl-protocol"><button data-v="rolling" class="active" data-i18n="rl.rolling">Rolling walk-forward</button><button data-v="fixed" data-i18n="rl.fixed">Fixed split</button></div>
+            <span class="control-label" data-i18n="rl.universe">Stocks</span>
+            <div class="ra-seg" id="rl-scope"><button data-v="all" class="active" data-i18n="rl.all10">10 stocks</button><button data-v="finmem5" data-i18n="rl.finmem5">FinMem's 5</button></div>
+          </div>
+          <span class="dim" id="rl-range"></span>
+        </div>
+        <div class="kpi-grid" id="rl-kpis"></div>
+        <div class="card">
+          <div class="card-header"><div><div class="card-title" data-i18n="rl.equity">Growth of $1 (equal-weight, after 5 bps costs)</div>
+            <div class="card-subtitle" data-i18n="rl.equity.sub">Click a legend entry to show or hide a strategy.</div></div></div>
+          <div id="rl-legend" class="ra-legend"></div>
+          <div id="rl-equity" class="ra-chart"></div>
+        </div>
+        <div class="ra-grid-2">
+          <div class="card"><div class="card-title" data-i18n="rl.table">All strategies (test period)</div><div class="table-container"><table class="ra-table" id="rl-table"></table></div></div>
+          <div class="card"><div><div class="card-title" data-i18n="rl.tests">Ours vs. each baseline</div>
+            <div class="card-subtitle" data-i18n="rl.tests.sub">Wilcoxon test on daily returns (Holm-adjusted); ΔSharpe with 95% bootstrap interval</div></div>
+            <div class="table-container"><table class="ra-table" id="rl-tests"></table></div></div>
+        </div>
+        <div class="card"><div class="card-title" data-i18n="rl.heat">Sharpe ratio per stock</div><div class="table-container" id="rl-heatmap"></div></div>
+        <div class="card" id="rl-zoo-card" hidden><div><div class="card-title" data-i18n="rl.zoo">Model zoo: deep learning, reinforcement learning and pattern matching</div>
+          <div class="card-subtitle" data-i18n="rl.zoo.sub">The same protocol, test window and costs for every model. ΔSharpe vs. Ours with 95% bootstrap interval. * = exploratory, defined after the main results.</div></div>
+          <div class="table-container"><table class="ra-table" id="rl-zoo"></table></div></div>
+        <div class="ra-grid-2">
+          <div class="card"><div><div class="card-title" data-i18n="rl.ic">Does the memory signal predict tomorrow?</div>
+            <div class="card-subtitle" data-i18n="rl.ic.sub">Rank correlation (IC) with next-day market-adjusted return; 0 = no predictive power</div></div><div id="rl-ic"></div></div>
+          <div class="card"><div><div class="card-title" data-i18n="rl.llm">LLM backbones (FinMem stocks, last 50 days)</div>
+            <div class="card-subtitle" data-i18n="rl.llm.sub">Same memory, same prompt, temperature 0</div></div><div class="table-container"><table class="ra-table" id="rl-llm"></table></div></div>
+        </div>
+        <div class="ra-grid-2">
+          <div class="card"><div class="card-title" data-i18n="rl.ops">Memory operations over the whole run</div><div class="table-container"><table class="ra-table" id="rl-ops"></table></div></div>
+          <div class="card"><div><div class="card-title" data-i18n="rl.cred">Learned source credibility</div>
+            <div class="card-subtitle" data-i18n="rl.cred.sub">How often each kind of headline pointed the right way</div></div><div id="rl-cred"></div></div>
+        </div>
+        <div class="card ra-findings"><div class="card-title" data-i18n="rl.findings">What the evidence says</div><ul id="rl-findings"></ul></div>
+        <div class="card"><div class="card-header"><div class="card-title" data-i18n="rl.figures">Paper figures</div><span class="dim" data-i18n="rl.figures.sub">click to enlarge</span></div>
+          <div id="rl-figures" class="ra-figures"></div></div>
+        <div id="ra-lightbox" class="ra-lightbox" hidden onclick="this.hidden=true"><img alt=""></div>
+      </section>
+
+      <!-- ============================================================ SETTINGS -->
+      <section class="page" id="page-settings">
+        <div class="subnav"><div class="seg" id="set-tabs">
+          <button data-panel="budget" class="active" data-i18n="set.budget">Budget &amp; limits</button>
+          <button data-panel="keys" data-i18n="set.keys">Connections</button>
+          <button data-panel="prefs" data-i18n="set.prefs">Preferences</button>
+        </div></div>
+
+        <div class="panel active" id="panel-budget">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">💰 <span data-i18n="bud.title">Your budget</span></div>
+              <div class="card-subtitle" data-i18n="bud.sub">How much money the AI may manage, and the limits it can never cross.</div></div></div>
+            <div class="form-grid" id="bud-form"></div>
+            <div class="field"><span class="field-label" data-i18n="bud.allowed">Stocks the AI may buy</span><div class="row" id="bud-tickers"></div></div>
+            <div class="alert info" id="bud-summary"></div>
+            <div class="row"><button class="btn btn-lg" onclick="Autopilot.saveBudget()">💾 <span data-i18n="bud.save">Save budget &amp; limits</span></button><span class="dim" id="bud-note"></span></div>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-keys">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">🔑 <span data-i18n="keys.title">Connections &amp; API keys</span></div>
+              <div class="card-subtitle" data-i18n-html="keys.sub">Paste a key and press <b>Save &amp; test</b>. The app checks it with the provider first and starts using it right away.</div></div></div>
+            <div id="cred-list" class="cred-list"><div class="muted" data-i18n="common.loading">Loading…</div></div>
+            <div class="dim" id="cred-store"></div>
+          </div>
+        </div>
+
+        <div class="panel" id="panel-prefs">
+          <div class="card">
+            <div class="card-title">🎨 <span data-i18n="prefs.look">Look &amp; language</span></div>
+            <div class="form-grid">
+              <div class="field"><span class="field-label" data-i18n="prefs.lang">Language</span>
+                <div class="seg"><button data-lang="en" onclick="App.setLang('en')">English</button><button data-lang="bn" onclick="App.setLang('bn')">বাংলা</button></div></div>
+              <div class="field"><span class="field-label" data-i18n="prefs.theme">Theme</span>
+                <div class="seg"><button data-theme-opt="light" onclick="App.setTheme('light')" data-i18n="prefs.light">Light</button>
+                  <button data-theme-opt="dark" onclick="App.setTheme('dark')" data-i18n="prefs.dark">Dark</button>
+                  <button data-theme-opt="system" onclick="App.setTheme('system')" data-i18n="prefs.system">Auto</button></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">🤖 <span data-i18n="prefs.ai">AI style</span></div>
+            <div class="form-grid">
+              <div class="field"><label for="set-risk" data-i18n="prefs.risk">Risk style</label>
+                <select id="set-risk"><option value="conservative" data-i18n="prefs.risk.c">Careful</option><option value="standard" data-i18n="prefs.risk.s">Balanced</option><option value="aggressive" data-i18n="prefs.risk.a">Bold</option></select></div>
+              <div class="field"><label for="set-provider" data-i18n="prefs.provider">AI provider order</label>
+                <select id="set-provider"><option value="auto" data-i18n="prefs.prov.auto">Auto (Groq first, OpenRouter backup)</option><option value="groq">Groq</option><option value="openrouter">OpenRouter</option></select></div>
+            </div>
+            <div class="row"><button class="btn" onclick="Trade.savePrefs()" data-i18n="common.save">Save</button></div>
+          </div>
+          <div class="card" id="prefs-local" hidden>
+            <div class="card-title">🧪 <span data-i18n="prefs.local">Practice account (local simulator)</span></div>
+            <div class="form-grid"><div class="field"><label for="set-capital" data-i18n="prefs.capital">Starting money</label>
+              <div class="input-affix pre"><span>$</span><input type="number" id="set-capital" value="100000" step="1000" min="1000"></div></div></div>
+            <div class="row"><button class="btn btn-secondary" onclick="Trade.resetAccount()" data-i18n="port.reset">Reset practice account</button></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottom-nav" aria-label="Quick navigation">
+  <button data-page="home" onclick="App.go('home')"><span class="ico">🏠</span><span data-i18n="nav.home">Home</span></button>
+  <button data-page="trade" onclick="App.go('trade')"><span class="ico">📈</span><span data-i18n="nav.trade">Trade</span></button>
+  <button data-page="portfolio" onclick="App.go('portfolio')"><span class="ico">💼</span><span data-i18n="nav.portfolio">Portfolio</span></button>
+  <button data-page="autopilot" onclick="App.go('autopilot')"><span class="ico">🤖</span><span data-i18n="nav.autopilot.short">Autopilot</span></button>
+  <button onclick="document.body.classList.add('nav-open')"><span class="ico">☰</span><span data-i18n="nav.more">More</span></button>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/i18n.js"></script>
+<script src="/core.js"></script>
+<script src="/charts.js"></script>
+<script src="/trade.js"></script>
+<script src="/autopilot.js"></script>
+<script src="/app.js"></script>
+<script src="/analytics.js"></script>
+<script src="/credentials.js"></script>
 </body>
 </html>

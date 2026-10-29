@@ -23,3 +23,6 @@ paper/uiu_template/*.lof
 paper/uiu_template/*.lot
 .planning/
 *.zip
+
+# API keys saved from the Settings tab
+artifacts/credentials.json

@@ -356,13 +356,21 @@ class AgentService:
                              "parse_ok": float(g["status"].str.startswith("ok").mean())})
             llm = rows
         figures = sorted(p.stem for p in FIGURE_DIR.glob("fig*.png")) if FIGURE_DIR.exists() else []
+        # Extension models (scripts/run_extensions.py) are only evaluated under the rolling protocol.
+        ext_path = STUDY_DIR / "rolling" / "extensions_summary.json"
+        extensions = None
+        if protocol == "rolling" and ext_path.exists():
+            ext = json.loads(ext_path.read_text())
+            extensions = {"portfolio": ext["portfolio"],
+                          "tests": {k: {f: v.get(f) for f in ("sharpe_diff", "ci_low", "ci_high", "wilcoxon_p")}
+                                    for k, v in ext["tests"].items()}}
         return _clean({"available": True, "protocol": protocol, "test_days": summary.get("test_days"),
                        "test_range": summary.get("test_range"), "portfolio": summary["portfolio"],
                        "finmem5": summary["finmem5"], "per_ticker": summary["per_ticker"], "ic": summary["ic"],
                        "tests": summary["tests"].get("Ours", {}), "curves": curves, "llm": llm,
                        "memory_stats": {k: v for k, v in summary.get("memory_stats", {}).items() if not k.startswith("_")},
                        "credibility": summary.get("memory_stats", {}).get("_credibility", {}).get("Ours", []),
-                       "figures": figures})
+                       "figures": figures, "extensions": extensions})
 
 
 service = AgentService()

@@ -33,6 +33,10 @@ except ImportError:
     np = None
 
 from .llm import DEFAULT_GROQ_MODELS, DEFAULT_OPENROUTER_FREE_MODELS, OpenRouterClient, SYSTEM_PROMPTS
+from . import credentials
+from .autopilot import Autopilot
+
+credentials.apply()  # keys saved in the Settings tab override .env (imported after .llm loaded it)
 
 
 def find_workspace_root() -> Path:
@@ -250,45 +254,62 @@ def get_summary_data() -> Dict[str, Any]:
     return summary
 
 
-def get_market_data(ticker: str = "TSLA") -> Dict[str, Any]:
-    """Calculate full price series and technical indicators for a ticker.
+def _daily_bars(ticker: str) -> Any:
+    """Real daily OHLCV for ``ticker``: the study panel (10 stocks) first, else data/prices.csv."""
+    study = WORKSPACE_ROOT / "data" / "study" / "prices.parquet"
+    if study.exists():
+        df = pd.read_parquet(study, columns=["date", "ticker", "open", "high", "low", "close", "volume"])
+        sub = df[df["ticker"] == ticker].sort_values("date")
+        if not sub.empty:
+            return sub.assign(date=pd.to_datetime(sub["date"]).dt.strftime("%Y-%m-%d"))[["date", "open", "high", "low", "close", "volume"]]
+    csv = DATA_DIR / "prices.csv"
+    if csv.exists():
+        df = pd.read_csv(csv)
+        sub = df[df["ticker"] == ticker].sort_values("date")
+        if not sub.empty:
+            # This file has closes only: show each day as open = previous close, without invented wicks.
+            close = sub["close"].astype(float)
+            opens = close.shift(1).fillna(close)
+            return pd.DataFrame({"date": sub["date"].astype(str), "open": opens, "high": np.maximum(opens, close),
+                                 "low": np.minimum(opens, close), "close": close, "volume": 0})
+    return None
+
+
+def get_market_data(ticker: str = "TSLA", days: int = 180) -> Dict[str, Any]:
+    """Daily price series (real OHLCV) plus indicators for a ticker.
 
     Indicators: SMA 20, SMA 50, EMA 12, EMA 26, RSI 14, MACD (12, 26, 9),
-    Bollinger Bands (20, 2 std), ATR.
+    Bollinger Bands (20, 2 std). They are computed on the full history and the
+    last ``days`` sessions are returned. A live Alpaca quote, when available,
+    updates (or adds) today's bar.
     """
     ticker = ticker.upper()
-    prices_path = DATA_DIR / "prices.csv"
-    if not prices_path.exists() or pd is None:
+    if pd is None:
         return {"ticker": ticker, "dates": [], "prices": [], "indicators": {}}
 
     try:
-        df = pd.read_csv(prices_path)
-        sub = df[df["ticker"] == ticker].sort_values("date").copy()
-        live_prices = _get_alpaca_latest_prices([ticker])
-        if sub.empty:
-            live_price = live_prices.get(ticker)
+        bars = _daily_bars(ticker)
+        live_price = _get_alpaca_latest_prices([ticker]).get(ticker)
+        if bars is None:
             if live_price is None:
-                sub = df[df["ticker"] == "TSLA"].sort_values("date").copy()
-                ticker = "TSLA"
-            else:
-                now = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
-                sub = pd.DataFrame({"date": [now], "close": [live_price]})
-
-        close = sub["close"].astype(float)
-        dates = [str(d) for d in sub["date"]]
-        prices = [round(float(p), 2) for p in close]
-        live_price = live_prices.get(ticker)
+                return {"ticker": ticker, "error": f"No price data for {ticker}", "dates": [], "prices": [], "indicators": {}}
+            bars = pd.DataFrame({"date": [datetime.now(timezone.utc).date().isoformat()], "open": [live_price],
+                                 "high": [live_price], "low": [live_price], "close": [live_price], "volume": [0]})
+        bars = bars.reset_index(drop=True)
         price_source = "historical"
         if live_price is not None:
-            # Keep one in-progress minute candle instead of growing the series every poll.
-            candle_time = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
-            if dates and dates[-1] == candle_time:
-                prices[-1] = round(float(live_price), 2)
+            today = datetime.now(timezone.utc).date().isoformat()
+            lp = float(live_price)
+            if bars["date"].iloc[-1] == today:
+                i = bars.index[-1]
+                bars.loc[i, ["close", "high", "low"]] = [lp, max(bars.at[i, "high"], lp), min(bars.at[i, "low"], lp)]
             else:
-                dates.append(candle_time)
-                prices.append(round(float(live_price), 2))
-            close = pd.Series(prices, dtype=float)
+                prev = float(bars["close"].iloc[-1])
+                bars.loc[len(bars)] = [today, prev, max(prev, lp), min(prev, lp), lp, 0]
             price_source = "alpaca_paper_live"
+        close = bars["close"].astype(float)
+        dates = list(bars["date"])
+        prices = [round(float(p), 2) for p in close]
 
         # Moving Averages
         sma20 = close.rolling(20, min_periods=1).mean()
@@ -314,48 +335,28 @@ def get_market_data(ticker: str = "TSLA") -> Dict[str, Any]:
         bb_upper = sma20 + (2.0 * bb_std)
         bb_lower = sma20 - (2.0 * bb_std)
 
-        # High/Low/Open synthesis for candlestick view
-        opens = [prices[0]] + prices[:-1]
-        highs = [round(max(o, c) * 1.004, 2) for o, c in zip(opens, prices)]
-        lows = [round(min(o, c) * 0.996, 2) for o, c in zip(opens, prices)]
-
-        # Relative change
         prev_c = prices[-2] if len(prices) > 1 else prices[-1]
         change_pct = round(((prices[-1] - prev_c) / prev_c) * 100.0, 2)
+        candles = [{"date": r.date, "open": round(float(r.open), 2), "high": round(float(r.high), 2),
+                    "low": round(float(r.low), 2), "close": round(float(r.close), 2), "volume": int(r.volume or 0)}
+                   for r in bars.itertuples()]
 
-        candles = []
-        for i in range(len(dates)):
-            candles.append({
-                "date": dates[i],
-                "open": opens[i],
-                "high": highs[i],
-                "low": lows[i],
-                "close": prices[i],
-                "volume": int(abs(prices[i] - opens[i]) * 100000 + 500000),
-            })
-
-        broker_positions = get_alpaca_positions()
+        keep = slice(-days, None) if days and len(dates) > days else slice(None)
+        series = lambda values, fill=None: [round(float(v), 2) if not np.isnan(v) else fill for v in list(values)[keep]]
         return {
             "ticker": ticker,
             "latest_price": prices[-1] if prices else 0.0,
             "change_pct": change_pct,
             "price_source": price_source,
             "as_of": dates[-1] if dates else None,
-            "dates": dates,
-            "prices": prices,
-            "candles": candles,
+            "dates": dates[keep],
+            "prices": prices[keep],
+            "candles": candles[keep],
             "indicators": {
-                "sma_20": [round(float(v), 2) if not np.isnan(v) else None for v in sma20],
-                "sma_50": [round(float(v), 2) if not np.isnan(v) else None for v in sma50],
-                "ema_12": [round(float(v), 2) if not np.isnan(v) else None for v in ema12],
-                "ema_26": [round(float(v), 2) if not np.isnan(v) else None for v in ema26],
-                "rsi_14": [round(float(v), 2) if not np.isnan(v) else 50.0 for v in rsi],
-                "macd": [round(float(v), 2) if not np.isnan(v) else 0.0 for v in macd],
-                "macd_signal": [round(float(v), 2) if not np.isnan(v) else 0.0 for v in macd_signal],
-                "macd_hist": [round(float(v), 2) if not np.isnan(v) else 0.0 for v in macd_hist],
-                "bb_upper": [round(float(v), 2) if not np.isnan(v) else None for v in bb_upper],
-                "bb_mid": [round(float(v), 2) if not np.isnan(v) else None for v in sma20],
-                "bb_lower": [round(float(v), 2) if not np.isnan(v) else None for v in bb_lower],
+                "sma_20": series(sma20), "sma_50": series(sma50), "ema_12": series(ema12), "ema_26": series(ema26),
+                "rsi_14": series(rsi, 50.0), "macd": series(macd, 0.0), "macd_signal": series(macd_signal, 0.0),
+                "macd_hist": series(macd_hist, 0.0), "bb_upper": series(bb_upper), "bb_mid": series(sma20),
+                "bb_lower": series(bb_lower),
             },
         }
     except Exception as e:
@@ -876,11 +877,88 @@ portfolio_mgr = PortfolioManager(PORTFOLIO_STATE_FILE, use_alpaca=True)
 
 
 def _position_sign(ticker: str) -> float:
-    pos = portfolio_mgr.positions.get(ticker)
-    if not pos:
-        return 0.0
-    shares = float(pos.get("shares", 0.0))
-    return 1.0 if shares > 0 else -1.0 if shares < 0 else 0.0
+    """+1 long, -1 short, 0 flat — from the broker in Alpaca mode, else the local simulator."""
+    for pos in portfolio_mgr.get_state().get("positions") or []:
+        if pos.get("ticker") == ticker.upper() and float(pos.get("shares") or 0.0) > 0:
+            return -1.0 if pos.get("side") == "Short" else 1.0
+    return 0.0
+
+
+class _DashboardBroker:
+    """What the autopilot needs from the app: account state, prices, orders and decisions."""
+
+    def state(self) -> Dict[str, Any]:
+        return portfolio_mgr.get_state()
+
+    def price(self, ticker: str) -> Optional[float]:
+        price = get_latest_prices().get(ticker)
+        if price:
+            return float(price)
+        from . import analytics
+
+        close = analytics.close_panel()
+        return float(close[ticker].dropna().iloc[-1]) if ticker in close.columns else None
+
+    def place(self, ticker: str, action: str, shares: float, reasoning: str, provider: str, model: str) -> Dict[str, Any]:
+        return portfolio_mgr.execute_order(ticker=ticker, action=action, shares=shares, is_ai=True,
+                                           reasoning=reasoning, provider=provider, model=model)
+
+    def decide(self, ticker: str, mode: str, backbone: str) -> Dict[str, Any]:
+        from .agent_service import service
+
+        position = _position_sign(ticker)
+        brief = service.brief(ticker, position=position)
+        cons = brief["consensus"]
+        rule = {"action": cons["action"], "confidence": cons["confidence"], "reasoning": "; ".join(cons["reasons"]),
+                "provider": "rule", "model": "memory + price consensus"}
+        if mode == "consensus":
+            return rule
+        try:
+            info = service.llm_decide(ticker, backbone, position)
+            d = info.get("decision") or {}
+            ok = str(d.get("status", "")).startswith("ok")
+        except Exception as exc:
+            ok, d, info = False, {"status": str(exc)}, {}
+        if not ok:
+            if mode == "llm_and_consensus":
+                return {**rule, "action": "Hold", "reasoning": f"LLM unavailable ({d.get('status')}), so no agreement: Hold"}
+            return {**rule, "reasoning": f"LLM unavailable ({d.get('status')}); rule consensus used. {rule['reasoning']}"}
+        llm = {"action": d.get("action", "Hold"), "confidence": d.get("confidence"), "reasoning": d.get("reasoning", ""),
+               "provider": info.get("provider", "llm"), "model": info.get("model", backbone)}
+        if llm["action"] == rule["action"]:
+            return llm
+        note = f"LLM says {llm['action']}, rule consensus says {rule['action']}"
+        if mode == "llm_and_consensus":
+            return {**llm, "action": "Hold", "reasoning": f"{note}: both must agree, so Hold"}
+        return {**llm, "disagreement": note}
+
+    def targets(self, method: str) -> Dict[str, float]:
+        plan = allocation_plan_for(method)
+        return {r["ticker"]: r["weight"] for r in plan["rows"]}
+
+
+def allocation_plan_for(method: str = "inverse_vol", lookback: int = 120) -> Dict[str, Any]:
+    """Budget split using the limits from Settings and the account's current holdings."""
+    from . import analytics
+
+    b = autopilot.budget
+    state = portfolio_mgr.get_state()
+    holdings: Dict[str, float] = {}
+    for pos in state.get("positions") or []:
+        sign = -1.0 if pos.get("side") == "Short" else 1.0
+        holdings[pos["ticker"]] = holdings.get(pos["ticker"], 0.0) + sign * float(pos.get("current_value") or 0.0)
+    signals = None
+    if method == "signal_tilt":
+        from .agent_service import service
+
+        signals = {r["ticker"]: r["consensus"] for r in service.scan()["rows"]}
+    prices = get_latest_prices()
+    return analytics.allocation_plan(float(b["total_budget"]), float(b["cash_reserve_pct"]), float(b["max_position_pct"]),
+                                     list(b["allowed_tickers"]), method, lookback, holdings, prices, signals)
+
+
+autopilot = Autopilot(ARTIFACTS_DIR / "paper_trading" / "autopilot.json",
+                      ARTIFACTS_DIR / "paper_trading" / "autopilot_log.jsonl", _DashboardBroker())
 
 
 def execute_ai_trade(
@@ -936,25 +1014,12 @@ def execute_ai_trade(
 
 def _route_agent_order(ticker: str, action: str, reasoning: str, provider: str, model: str,
                        ref_price: Optional[float]) -> Optional[Dict[str, Any]]:
-    """Buy opens/extends a long sized by ``max_position_pct``; Sell closes a long.
-    Hold leaves the position unchanged (FinMem action semantics)."""
-    if action == "Buy":
-        state = portfolio_mgr.get_state()
-        equity = float(state.get("equity", portfolio_mgr.cash))
-        budget = min(portfolio_mgr.cash, equity * float(portfolio_mgr.settings.get("max_position_pct", 25.0)) / 100.0)
-        held = portfolio_mgr.positions.get(ticker, {})
-        price = get_latest_prices().get(ticker) or ref_price or 0.0
-        budget -= float(held.get("shares", 0.0)) * price
-        if budget <= 0 or price <= 0:
-            return {"error": "position already at the max_position_pct limit"}
-        return portfolio_mgr.execute_order(ticker=ticker, action="Buy", shares=budget / price, is_ai=True,
-                                           reasoning=f"Agent [{provider} / {model}]: {reasoning}",
-                                           provider=provider, model=model)
-    if action == "Sell" and ticker in portfolio_mgr.positions:
-        return portfolio_mgr.execute_order(ticker=ticker, action="Sell", shares=portfolio_mgr.positions[ticker]["shares"],
-                                           is_ai=True, reasoning=f"Agent [{provider} / {model}]: {reasoning}",
-                                           provider=provider, model=model)
-    return None
+    """A one-off agent trade the user clicked for. Sized and checked by the same budget
+    guardrails as the autopilot. Buy opens/extends a long; Sell closes it; Hold does nothing."""
+    if action not in ("Buy", "Sell"):
+        return None
+    return autopilot.execute_now(ticker, {"action": action, "reasoning": reasoning, "provider": provider,
+                                          "model": model}, "manual agent run")
 
 
 def get_equity_data(dataset: str = "offline", ticker: str = "TSLA", trial: int = 0) -> Dict[str, Any]:
@@ -1243,6 +1308,19 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self._agent_get(path, query)
             return
 
+        if path.startswith("/api/analytics/"):
+            self._analytics_get(path, query)
+            return
+
+        if path == "/api/autopilot/status":
+            self._send_json(autopilot.status())
+            return
+
+        if path == "/api/credentials":
+            if self._credentials_allowed():
+                self._send_json(credentials.status())
+            return
+
         if path == "/api/market_data":
             ticker = query.get("ticker", ["TSLA"])[0]
             self._send_json(get_market_data(ticker=ticker))
@@ -1342,6 +1420,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
         if path.startswith("/api/agent/"):
             self._agent_post(path, body)
+            return
+
+        if path.startswith("/api/credentials/"):
+            self._credentials_post(path, body)
+            return
+
+        if path.startswith("/api/autopilot/"):
+            self._autopilot_post(path, body)
             return
 
         if path == "/api/manual_trade":
@@ -1453,6 +1539,126 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as exc:
             self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
 
+    def _credentials_allowed(self) -> bool:
+        """Keys may only be read or changed by a browser on this machine, from this app's own page."""
+        local_hosts = {"localhost", "127.0.0.1", "::1", str(self.server.server_address[0])}
+        host = urllib.parse.urlsplit(f"//{self.headers.get('Host', '')}").hostname or ""
+        origin = self.headers.get("Origin")
+        same_origin = origin is None or urllib.parse.urlsplit(origin).netloc == self.headers.get("Host")
+        if self.client_address[0] in ("127.0.0.1", "::1") and host in local_hosts and same_origin:
+            return True
+        self._send_json({"error": "API keys can only be managed from the app on this computer."}, status=403)
+        return False
+
+    def _credentials_post(self, path: str, body: Dict[str, Any]) -> None:
+        if not self._credentials_allowed():
+            return
+        provider = str(body.get("provider", ""))
+        values = body.get("values")
+        try:
+            if path == "/api/credentials/save":
+                res = credentials.save(provider, values or {}, test_first=body.get("test", True) is not False)
+                self._send_json({**res, "status": credentials.status()}, status=200 if res["saved"] else 400)
+            elif path == "/api/credentials/test":
+                self._send_json({"test": credentials.test(provider, values), "status": credentials.status()})
+            elif path == "/api/credentials/remove":
+                credentials.remove(provider)
+                self._send_json({"removed": True, "status": credentials.status()})
+            else:
+                self._send_json({"error": "not found"}, status=404)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+
+    def _autopilot_post(self, path: str, body: Dict[str, Any]) -> None:
+        # Trading controls change what the agent may do with money: same-machine browser only.
+        if not self._credentials_allowed():
+            return
+        try:
+            if path == "/api/autopilot/config":
+                autopilot.update(budget=body.get("budget"), config=body.get("config"))
+                self._send_json(autopilot.status())
+            elif path == "/api/autopilot/kill":
+                cancelled = autopilot.engage_kill_switch(str(body.get("reason") or "manual emergency stop"))
+                closed = []
+                if body.get("close_all"):
+                    for pos in portfolio_mgr.get_state().get("positions") or []:
+                        res = portfolio_mgr.close_position(pos["ticker"])
+                        closed.append({"ticker": pos["ticker"], "success": bool(res.get("success")), "error": res.get("error")})
+                self._send_json({"cancelled": cancelled, "closed": closed, "status": autopilot.status()})
+            elif path == "/api/autopilot/resume":
+                autopilot.release_kill_switch()
+                self._send_json(autopilot.status())
+            elif path == "/api/autopilot/run_once":
+                results = autopilot.run_cycle(manual=True)
+                self._send_json({"results": results, "status": autopilot.status()})
+            elif path == "/api/autopilot/resolve":
+                ids = body.get("ids") or [body.get("id")]
+                results = [autopilot.resolve(str(i), bool(body.get("approve"))) for i in ids if i]
+                self._send_json({"results": results, "status": autopilot.status()})
+            elif path == "/api/autopilot/rebalance":
+                plan = allocation_plan_for(str(body.get("method", "inverse_vol")))
+                rows = sorted(plan["rows"], key=lambda r: r["delta_usd"])  # sells first free up cash
+                queued = []
+                for r in rows:
+                    if abs(r["delta_usd"]) < max(1.0, float(body.get("min_trade_usd", 25.0))):
+                        continue
+                    reason = f"Rebalance to {plan['method_label']}: target ${r['target_usd']:,.0f} ({r['weight']:.1%} of budget)"
+                    if r["delta_usd"] > 0:
+                        queued.append(autopilot.queue_order(r["ticker"], "Buy", reason, notional=r["delta_usd"]))
+                    else:
+                        shares = -r["delta_usd"] / r["price"]
+                        queued.append(autopilot.queue_order(r["ticker"], "Sell", reason, shares=shares))
+                self._send_json({"queued": queued, "status": autopilot.status()})
+            else:
+                self._send_json({"error": "not found"}, status=404)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+
+    def _analytics_get(self, path: str, query: Dict[str, list]) -> None:
+        from . import analytics
+
+        q = lambda key, default=None: (query.get(key) or [default])[0]
+        ticker = str(q("ticker", "TSLA")).upper()
+        scope = "universe" if q("scope") == "universe" else "ticker"
+        try:
+            pattern = dict(ticker=ticker, window=int(q("window", 20)), horizon=int(q("horizon", 10)),
+                           k=int(q("k", 8)), scope=scope, threshold=float(q("threshold", 0.01)))
+            if path == "/api/analytics/analogs":
+                self._send_json(analytics.pattern_analogs(**pattern))
+            elif path == "/api/analytics/backtest":
+                self._send_json(analytics.analog_backtest(**pattern, long_only=q("long_only") in ("1", "true"),
+                                                          cost_bps=float(q("cost_bps", 5.0))))
+            elif path == "/api/analytics/sweep":
+                self._send_json(analytics.analog_sweep(ticker, scope, pattern["k"], pattern["threshold"],
+                                                       q("long_only") in ("1", "true")))
+            elif path == "/api/analytics/risk":
+                self._send_json(analytics.risk_report(ticker))
+            elif path == "/api/analytics/correlation":
+                self._send_json(analytics.correlation_matrix(int(q("lookback", 120))))
+            elif path == "/api/analytics/algorithms":
+                from . import algorithms
+                self._send_json(algorithms.algorithm_board(ticker))
+            elif path == "/api/analytics/experience":
+                from . import algorithms
+                self._send_json(algorithms.experience(ticker, str(q("system", "Ours")), int(q("limit", 40))))
+            elif path == "/api/analytics/rl":
+                from . import algorithms
+                self._send_json(algorithms.q_learning_agent(ticker, int(q("epochs", 30)), cost_bps=float(q("cost_bps", 5.0))))
+            elif path == "/api/analytics/allocation":
+                self._send_json(allocation_plan_for(str(q("method", "inverse_vol")), int(q("lookback", 120))))
+            elif path == "/api/analytics/portfolio":
+                self._send_json(analytics.portfolio_distribution(portfolio_mgr.get_state(), ticker, int(q("days", 21))))
+            else:
+                self._send_json({"error": "not found"}, status=404)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+
     def _agent_post(self, path: str, body: Dict[str, Any]) -> None:
         from .agent_service import service
 
@@ -1497,6 +1703,14 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # The browser aborted the request (page refresh, tab switch, or a
+        # superseded fetch) before the response was written. Nothing to do.
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            return
+        super().handle_error(request, client_address)
+
 
 def start_server(port: int = 8050, host: str = "127.0.0.1") -> None:
     DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
@@ -1511,6 +1725,7 @@ def start_server(port: int = 8050, host: str = "127.0.0.1") -> None:
     else:
         print(f"Error: Could not bind to any port in range {port}-{port+20}")
         sys.exit(1)
+    autopilot.start()
 
     print("\n" + "=" * 70)
     print(" 🚀 AGENTIC TRADE HARNESS & TRADING APPLICATION SERVER RUNNING")
